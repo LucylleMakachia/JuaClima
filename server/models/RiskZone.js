@@ -1,15 +1,11 @@
 import mongoose from "mongoose";
 
 const RiskZoneSchema = new mongoose.Schema({
-  name: String,
-  riskLevel: String,
-  coordinates: {
-    lat: Number,
-    lng: Number,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
+  name: { type: String, required: true },
+  riskLevel: { type: String, enum: ["Low", "Medium", "High"], required: true },
+  location: {
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true },
   },
 });
 

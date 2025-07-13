@@ -1,9 +1,9 @@
 import express from "express";
-import { getZones, addZone } from "../controllers/riskZoneController.js";
+import { getZones, createRiskZone } from "../controllers/riskZoneController.js";
 
 const router = express.Router();
 
 router.get("/", getZones);
-router.post("/", addZone);
+router.post("/", createRiskZone); 
 
 export default router;

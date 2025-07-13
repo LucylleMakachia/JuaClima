@@ -15,9 +15,12 @@
     "autoprefixer": "^10.4.21",
     "axios": "^1.10.0",
     "classnames": "^2.5.1",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.525.0",
     "postcss": "^8.5.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.6.3",
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.11"

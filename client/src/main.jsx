@@ -1,19 +1,21 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ClerkProvider } from '@clerk/clerk-react'
+import 'leaflet/dist/leaflet.css';
 import './index.css'
 import App from './App.jsx'
-
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
-    <App />
-  </ClerkProvider>
-);
-
-createRoot(document.getElementById('root')).render(
+const container = document.getElementById('root')
+const root = createRoot(container)
+root.render(
   <StrictMode>
-    <App />
-  </StrictMode>,
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </ClerkProvider>
+  </StrictMode>
 )
