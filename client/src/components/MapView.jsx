@@ -1,76 +1,74 @@
+// src/components/MapView.jsx
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import { useMap } from 'react-leaflet';
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { fetchZones } from "../services/api";
+import { getWeatherByCoords } from "../services/weather";
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: new URL("leaflet/dist/images/marker-icon-2x.png", import.meta.url).href,
-  iconUrl: new URL("leaflet/dist/images/marker-icon.png", import.meta.url).href,
-  shadowUrl: new URL("leaflet/dist/images/marker-shadow.png", import.meta.url).href,
-});
-
-// Custom FitBounds component
-const FitBounds = ({ zones }) => {
-  const map = useMap();
+export default function MapView() {
+  const [zones, setZones] = useState([]);
 
   useEffect(() => {
-    if (zones && zones.length > 0) {
-      // Filter zones that have valid location data
-      const validZones = zones.filter(zone => 
-        zone.location && 
-        typeof zone.location.lat === 'number' && 
-        typeof zone.location.lng === 'number'
-      );
-      
-      if (validZones.length > 0) {
-        const bounds = validZones.map(zone => [zone.location.lat, zone.location.lng]);
-        map.fitBounds(bounds);
+    const loadZonesWithWeather = async () => {
+      try {
+        const res = await fetchZones();
+
+        const zonesWithWeather = await Promise.all(
+          res.data.map(async (zone) => {
+            try {
+              const weather = await getWeatherByCoords(
+                zone.location.lat,
+                zone.location.lng
+              );
+              return { ...zone, weather };
+            } catch (e) {
+              return { ...zone, weather: null };
+            }
+          })
+        );
+
+        setZones(zonesWithWeather);
+      } catch (err) {
+        console.error("Error loading zones:", err);
       }
-    }
-  }, [zones, map]);
+    };
 
-  return null;
-};
-
-const MapView = ({ zones }) => {
-  // Filter out zones without valid location data
-  const validZones = zones.filter(zone => {
-    const hasLocation = zone.location && 
-                       typeof zone.location.lat === 'number' && 
-                       typeof zone.location.lng === 'number';
-    
-    if (!hasLocation) {
-      console.warn('Zone missing location data:', zone);
-    }
-    
-    return hasLocation;
-  });
+    loadZonesWithWeather();
+  }, []);
 
   return (
     <MapContainer
-      center={[-1.286389, 36.817223]} // fallback if no zones
+      center={[-1.2864, 36.8172]}
       zoom={6}
-      className="h-[400px] w-full rounded mb-6"
+      className="h-[500px] w-full rounded"
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap'
+        attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-
-      <FitBounds zones={validZones} />
-
-      {validZones.map((zone, i) => (
-        <Marker key={zone._id || i} position={[zone.location.lat, zone.location.lng]}>
+      {zones.map((zone, index) => (
+        <Marker
+          key={index}
+          position={[zone.location.lat, zone.location.lng]}
+        >
           <Popup>
-            <strong>{zone.name}</strong><br />
+            <strong>{zone.name}</strong>
+            <br />
             Risk Level: {zone.riskLevel}
+            <br />
+            {zone.weather ? (
+              <>
+                🌡️ Temp: {zone.weather.temperature_2m}°C
+                <br />
+                ☔ Rain: {zone.weather.precipitation} mm
+                <br />
+                💨 Wind: {zone.weather.wind_speed_10m} km/h
+              </>
+            ) : (
+              <em>Weather unavailable</em>
+            )}
           </Popup>
         </Marker>
       ))}
     </MapContainer>
   );
-};
-
-export default MapView;
+}

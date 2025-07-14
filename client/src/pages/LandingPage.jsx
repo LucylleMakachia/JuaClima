@@ -1,4 +1,3 @@
-// src/pages/LandingPage.jsx
 import React from "react";
 import Navbar from "../components/Navbar";
 import HeroSection from "../components/HeroSection";
@@ -8,6 +7,8 @@ import DashboardPreview from "../components/DashboardPreview";
 import KnowledgeSection from "../components/KnowledgeSection";
 import CommunityPreview from "../components/CommunityPreview";
 import Footer from "../components/Footer";
+import ChatTab from "../components/ChatTab";
+
 
 export default function LandingPage() {
   return (
@@ -22,6 +23,7 @@ export default function LandingPage() {
         <DashboardPreview />
         <KnowledgeSection />
         <CommunityPreview />
+        <ChatTab />
       </main>
       <Footer />
     </div>
