@@ -1,5 +1,6 @@
 import { clerkClient, verifyToken } from "@clerk/backend";
 
+
 export async function requireClerkAuth(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
