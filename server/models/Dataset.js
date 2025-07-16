@@ -27,7 +27,8 @@ const DatasetSchema = new mongoose.Schema(
         default: "FeatureCollection"
       },
       features: Array // 🗺️ Optional for GeoJSON
-    }
+    },
+    username: String,
   },
   { timestamps: true }
 );

@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pyshp
+geojson
+rasterio
+matplotlib
+python-multipart
