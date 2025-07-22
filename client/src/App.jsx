@@ -1,50 +1,52 @@
-import { useEffect, useState } from "react";
-import { fetchZones } from "./services/api";
-import RiskZoneForm from "./components/RiskZoneForm";
-import MapView from "./components/MapView";
+import { Routes, Route } from "react-router-dom";
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
+import Home from "./pages/Home";
+import Upload from "./pages/Upload";
+import Datasets from "./pages/Datasets";
+import Chat from "./pages/Chat";
+import Dashboard from "./pages/Dashboard";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminFAQManager from "./components/AdminFAQManager";
+import FAQ from "./pages/FAQ";
+import Contact from "./pages/Contact";
+import Settings from "./pages/Settings";
 
-function App() {
-  const [zones, setZones] = useState([]);
+import LandingPage from "./pages/LandingPage";
+import SignInPage from "./pages/SignInPage";
+import SignUpPage from "./pages/SignUpPage";
+import UserProfilePage from "./pages/UserProfilePage";
 
-  useEffect(() => {
-    fetchZones()
-      .then((res) => {
-        console.log("Raw API response:", res.data); // Debug log
-        
-        // Normalize the data to always use 'location' property
-        const normalizedZones = res.data.map(zone => {
-          const location = zone.location || zone.coordinates;
-          
-          if (!location) {
-            console.warn("Zone missing location/coordinates:", zone);
-            return null;
-          }
-          
-          return {
-            ...zone,
-            location: location
-          };
-        }).filter(Boolean); // Remove null entries
-        
-        console.log("Normalized zones:", normalizedZones); // Debug log
-        setZones(normalizedZones);
-      })
-      .catch((err) => console.error("Failed to fetch zones:", err));
-  }, []);
-
-  const handleAdd = (newZone) => {
-    setZones((prev) => [...prev, newZone]);
-  };
-
+export default function App() {
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">JuaClima Risk Zones</h1>
+    <div className="bg-gray-50 dark:bg-gray-900 text-black dark:text-white min-h-screen">
+      <Routes>
+        {/* Landing and auth routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/sign-in" element={<SignInPage />} />
+        <Route path="/sign-up" element={<SignUpPage />} />
+        <Route path="/profile" element={<UserProfilePage />} />
+        <Route path="/settings" element={<Settings />} />
 
-      <RiskZoneForm onNewZone={handleAdd} />
+        {/* Main app routes */}
+        <Route path="/home" element={<Home />} />
+        <Route path="/upload" element={<Upload />} />
+        <Route path="/datasets" element={<Datasets />} />
+        <Route path="/community" element={<Chat />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/contact" element={<Contact />} />
 
-      <MapView zones={zones} />
+        {/* Protected admin FAQ manager route */}
+        <Route
+          path="/admin/faqs"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminFAQManager />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
     </div>
   );
 }
-
-export default App;

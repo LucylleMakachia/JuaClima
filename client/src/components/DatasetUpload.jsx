@@ -3,19 +3,12 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import * as shp from "shpjs";
-import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 import Papa from "papaparse";
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+
+import CsvTablePreview from "../components/CsvTablePreview";
+import ChartPreview from "../components/ChartPreview";
+import MapPreview from "../components/MapPreview";
+import RasterPreview from "../components/RasterPreview";
 
 export default function DatasetUpload() {
   const [file, setFile] = useState(null);
@@ -26,11 +19,9 @@ export default function DatasetUpload() {
   const [previewData, setPreviewData] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [geoJson, setGeoJson] = useState(null);
+  const [geoJsonLayer, setGeoJsonLayer] = useState(null);
   const [rasterMeta, setRasterMeta] = useState(null);
   const [rasterPreview, setRasterPreview] = useState(null);
-  const [geoJsonLayer, setGeoJsonLayer] = useState(null);
-
 
   const { user } = useUser();
   const { getToken } = useAuth();
@@ -38,7 +29,7 @@ export default function DatasetUpload() {
   const fetchDatasets = async () => {
     const res = await fetch("http://localhost:5000/api/datasets");
     const data = await res.json();
-    setDatasets(data);
+    setDatasets(data.datasets || []);
   };
 
   useEffect(() => {
@@ -55,7 +46,7 @@ export default function DatasetUpload() {
         body: formData,
       });
       const geojson = await res.json();
-      if (geojson.features) setGeoJson(geojson);
+      if (geojson.features) setGeoJsonLayer(geojson);
     } else if (file.name.endsWith(".tif")) {
       const res = await fetch("http://localhost:8000/preview/raster", {
         method: "POST",
@@ -70,7 +61,6 @@ export default function DatasetUpload() {
   const handlePreview = async (e) => {
     const selectedFile = e.target.files[0];
     setFile(selectedFile);
-
     const ext = selectedFile.name.split(".").pop();
 
     if (ext === "csv") {
@@ -110,7 +100,6 @@ export default function DatasetUpload() {
       };
       reader.readAsArrayBuffer(selectedFile);
     }
-
   };
 
   const handleSubmit = async (e) => {
@@ -164,7 +153,7 @@ export default function DatasetUpload() {
         setEditingId(null);
         setPreviewData([]);
         setChartData([]);
-        setGeoJson(null);
+        setGeoJsonLayer(null);
         setRasterMeta(null);
         setRasterPreview(null);
         fetchDatasets();
@@ -220,7 +209,7 @@ export default function DatasetUpload() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="file"
-          accept=".csv, .xlsx, .xls, .geojson, .json, .shp, .tif"
+          accept=".csv, .xlsx, .xls, .geojson, .json, .shp, .tif, .zip"
           onChange={handlePreview}
           className="border p-2 rounded"
         />
@@ -255,62 +244,11 @@ export default function DatasetUpload() {
         </button>
       </form>
 
-      {/* CSV Preview */}
-      {previewData.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-2">📄 CSV Preview</h3>
-          <table className="table-auto w-full text-sm">
-            <thead>
-              <tr>
-                {Object.keys(previewData[0]).map((key) => (
-                  <th key={key} className="border px-2 py-1 bg-gray-100">
-                    {key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {previewData.map((row, i) => (
-                <tr key={i}>
-                  {Object.values(row).map((val, j) => (
-                    <td key={j} className="border px-2 py-1">
-                      {val?.toString()}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <CsvTablePreview data={previewData} />
+      <ChartPreview chartData={chartData} />
+      <RasterPreview previewUrl={rasterPreview} meta={rasterMeta} />
+      <MapPreview geoJsonData={geoJsonLayer} />
 
-      {/* Chart */}
-      {chartData.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-2">📊 Auto Chart</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Raster Preview */}
-      {rasterPreview && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-2">🖼️ Raster Preview</h3>
-          <img src={rasterPreview} alt="GeoTIFF Preview" className="border rounded" />
-          <pre className="text-xs bg-gray-100 p-2 mt-2 rounded">
-            {JSON.stringify(rasterMeta, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {/* Dataset Table */}
       <div className="mt-10">
         <h3 className="text-lg font-semibold mb-2">📁 Uploaded Datasets</h3>
         <table className="w-full table-auto border text-sm">
@@ -354,18 +292,6 @@ export default function DatasetUpload() {
           </tbody>
         </table>
       </div>
-
-      // Map Preview
-      {geoJsonLayer && (
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-2">🗺️ Map Preview</h3>
-        <MapContainer center={[0.0236, 37.9062]} zoom={5} style={{ height: "400px", width: "100%" }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <GeoJSON data={geoJsonLayer} />
-        </MapContainer>
-      </div>
-    )}
-
 
       <ToastContainer position="top-right" autoClose={3000} />
     </div>

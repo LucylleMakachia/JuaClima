@@ -15,14 +15,22 @@
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
     "@clerk/backend": "^2.4.1",
+    "@clerk/express": "^1.7.10",
+    "@turf/turf": "^7.2.0",
     "bad-words": "^4.0.0",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "json2csv": "6.0.0-alpha.2",
     "mongoose": "^8.16.3",
+    "morgan": "^1.10.1",
     "multer": "^2.0.1",
-    "socket.io": "^4.8.1"
+    "shpjs": "^6.1.0",
+    "socket.io": "^4.8.1",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
