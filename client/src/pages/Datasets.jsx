@@ -1,423 +1,284 @@
-import { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, FeatureGroup, GeoJSON } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import "leaflet-draw/dist/leaflet.draw.css";
+import React, { useEffect, useState, useRef } from "react";
 import L from "leaflet";
-import "leaflet-draw";
+import "leaflet/dist/leaflet.css";
+import { getAllDatasets, getLocationWeather } from "../services/datasetService";
+import DatasetCard from "../components/DatasetCard";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import * as turf from "@turf/turf";
 
-import DatasetCard from "../components/DatasetCard";
-import LocationSearch from "../components/LocationSearch";
-import Loading from "../components/Loading";
-import Error from "../components/Error";
-import { getDatasets } from "../services/api";
-
-import { EditControl } from "react-leaflet-draw";
+// Fix for default markers in Leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 export default function Datasets() {
-  const mapRef = useRef();
-  const drawRef = useRef();
-
   const [datasets, setDatasets] = useState([]);
-  const [page, setPage] = useState(1);
   const [filtered, setFiltered] = useState([]);
-  const [filterShapes, setFilterShapes] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [limit, setLimit] = useState(6);
-  const [query, setQuery] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [locationWeather, setLocationWeather] = useState(null);
+  const [loadingWeather, setLoadingWeather] = useState(false);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
 
-  const [savedFilters, setSavedFilters] = useState([]);
-  const isPremium = true;
-  const userToken = ""; // Use real token in prod
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-
-  const paginated = filtered.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-);
-
-  const handleExport = async (format) => {
-  const url = new URL("/api/datasets/export", window.location.origin);
-  url.searchParams.set("format", format);
-  if (bounds) url.searchParams.set("bbox", JSON.stringify(bounds));
-  
-  const res = await fetch(url);
-  const blob = await res.blob();
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `datasets.${format === "csv" ? "csv" : "geojson"}`;
-  link.click();
-};
-
-
-
-  // Fetch datasets
-  useEffect(() => {
-    getDatasets()
-      .then((res) => {
-        setDatasets(res.data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Failed to load datasets");
-        setLoading(false);
-      });
-  }, []);
-
-  // Load filter shapes from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("filterShapes");
-    if (saved) {
-      try {
-        setFilterShapes(JSON.parse(saved));
-      } catch {
-        console.warn("Invalid saved shapes");
-      }
-    }
-  }, []);
-
-  // Fetch paginated datasets
+  // Fetch initial datasets
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
-        const data = await getDatasets({
-          page,
-          limit,
-          bbox: bounds,
-          query
-        });
-        setDatasets(data.datasets);
-        setTotalPages(data.totalPages);
-        setLoading(false);
+        const result = await getAllDatasets();
+        if (result.datasets && Array.isArray(result.datasets)) {
+          setDatasets(result.datasets);
+          setFiltered(result.datasets);
+        } else if (Array.isArray(result)) {
+          setDatasets(result);
+          setFiltered(result);
+        } else {
+          console.error("Unexpected data format from API:", result);
+          setDatasets([]);
+          setFiltered([]);
+        }
       } catch (err) {
-        setError(err.message);
+        console.error("Failed to fetch datasets:", err);
+        setDatasets([]);
+        setFiltered([]);
+      } finally {
         setLoading(false);
       }
     };
+
     fetchData();
-  }, [page, bounds, limit, query]);
-
-
-
-  // Apply spatial filtering using Turf
-  useEffect(() => {
-    if (!filterShapes || datasets.length === 0) {
-      setFiltered(datasets);
-      return;
-    }
-
-    setCurrentPage(1);
-
-    const filteredResults = datasets.filter((dataset) => {
-      if (!dataset.geojson) return false;
-      try {
-        const feature =
-          typeof dataset.geojson === "string"
-            ? JSON.parse(dataset.geojson)
-            : dataset.geojson;
-
-        return filterShapes.features.some((shape) =>
-          turf.booleanIntersects(shape, feature)
-        );
-      } catch {
-        return false;
-      }
-    });
-
-    setFiltered(filteredResults);
-  }, [datasets, filterShapes]);
-
-  // Load saved filters from backend
-  useEffect(() => {
-    if (!isPremium) return;
-
-    fetch("/api/filters", {
-      headers: { Authorization: `Bearer ${userToken}` },
-    })
-      .then((res) => res.json())
-      .then((data) => setSavedFilters(data))
-      .catch((err) => console.warn("Failed to load saved filters", err));
   }, []);
 
+  // Fetch weather data for selected location
   useEffect(() => {
-  getSavedFilters().then(setSaved).catch(console.error);
-}, []);
+    if (!selectedLocation) return;
 
-
-  // Draw Handlers
-  const handleDrawCreated = (e) => {
-    const newFeature = e.layer.toGeoJSON();
-    const updated = filterShapes
-      ? { ...filterShapes, features: [...filterShapes.features, newFeature] }
-      : { type: "FeatureCollection", features: [newFeature] };
-
-    setFilterShapes(updated);
-    localStorage.setItem("filterShapes", JSON.stringify(updated));
-  };
-
-  const handleDrawDeleted = (e) => {
-    const deletedLayers = new Set();
-    e.layers.eachLayer((layer) => deletedLayers.add(layer._leaflet_id));
-
-    const remaining = filterShapes.features.filter(
-      (_, i) => !deletedLayers.has(i)
-    );
-
-    const updated = { type: "FeatureCollection", features: remaining };
-    setFilterShapes(updated);
-    localStorage.setItem("filterShapes", JSON.stringify(updated));
-  };
-
-  const clearFilters = () => {
-    setFilterShapes(null);
-    localStorage.removeItem("filterShapes");
-  };
-
-  const handleLocationSelect = ({ center }) => {
-    mapRef.current?.flyTo(center, 10);
-  };
-
-  const setBoundsFromGeoJSON = (geometry) => {
-    const fc = {
-      type: "FeatureCollection",
-      features: [geometry],
+    const fetchLocationWeather = async () => {
+      setLoadingWeather(true);
+      try {
+        const weather = await getLocationWeather(selectedLocation.lat, selectedLocation.lng);
+        setLocationWeather(weather);
+        
+        // Filter datasets based on proximity to selected location (within 100km)
+        const nearbyDatasets = datasets.filter((dataset) => {
+          if (!dataset.coordinates) return false;
+          
+          const datasetPoint = turf.point(dataset.coordinates);
+          const selectedPoint = turf.point([selectedLocation.lng, selectedLocation.lat]);
+          const distance = turf.distance(datasetPoint, selectedPoint, { units: 'kilometers' });
+          
+          return distance <= 100; // Show datasets within 100km
+        });
+        
+        // Add the new location weather data to filtered results
+        const locationDataset = {
+          _id: `location_${selectedLocation.lat}_${selectedLocation.lng}`,
+          name: `Selected Location Weather`,
+          description: `Weather data for selected location (${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)})`,
+          coordinates: [selectedLocation.lng, selectedLocation.lat],
+          weather: weather,
+          tags: ['selected', 'real-time', 'custom-location'],
+          data_source: 'OpenWeatherMap API',
+          last_updated: new Date().toISOString(),
+          isCustomLocation: true
+        };
+        
+        setFiltered([locationDataset, ...nearbyDatasets]);
+      } catch (error) {
+        console.error("Failed to fetch location weather:", error);
+      } finally {
+        setLoadingWeather(false);
+      }
     };
-    setFilterShapes(fc);
-    localStorage.setItem("filterShapes", JSON.stringify(fc));
-  };
 
-  const handleSaveFilter = async () => {
-    if (!filterShapes) return;
+    fetchLocationWeather();
+  }, [selectedLocation, datasets]);
 
-    const res = await fetch("/api/filters", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${userToken}`,
-      },
-      body: JSON.stringify({
-        name: "My Nairobi Polygon",
-        geometry: filterShapes,
-      }),
+  const handleMapClick = async (e) => {
+    const { lat, lng } = e.latlng;
+    
+    // Set selected location
+    setSelectedLocation({ lat, lng });
+    
+    // Remove existing marker
+    if (markerRef.current) {
+      mapRef.current.removeLayer(markerRef.current);
+    }
+    
+    // Add new marker
+    const customIcon = L.divIcon({
+      html: `<div style="background: #ef4444; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [20, 20],
+      className: 'custom-marker'
     });
-
-    const saved = await res.json();
-    setSavedFilters((prev) => [...prev, saved]);
+    
+    markerRef.current = L.marker([lat, lng], { icon: customIcon })
+      .addTo(mapRef.current)
+      .bindPopup(`
+        <div style="text-align: center; padding: 8px;">
+          <strong>Selected Location</strong><br>
+          <small>Lat: ${lat.toFixed(4)}<br>Lng: ${lng.toFixed(4)}</small><br>
+          <div style="margin-top: 8px; color: #666;">Loading weather data...</div>
+        </div>
+      `)
+      .openPopup();
   };
 
-  const handleDeleteFilter = async (id) => {
-    try {
-      await fetch(`/api/filters/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${userToken}` },
-      });
-      setSavedFilters((prev) => prev.filter((f) => f._id !== id));
-    } catch (err) {
-      console.error("Error deleting filter", err);
+  const clearSelection = () => {
+    setSelectedLocation(null);
+    setLocationWeather(null);
+    setFiltered(datasets);
+    
+    if (markerRef.current) {
+      mapRef.current.removeLayer(markerRef.current);
+      markerRef.current = null;
     }
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">Datasets (Filtered by Map Area)</h2>
-        <button
-          onClick={clearFilters}
-          className="bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200 text-sm"
-        >
-          Clear Filters
-        </button>
-      </div>
-
-      <LocationSearch onSelect={handleLocationSelect} />
-
-      <div className="h-96 rounded border overflow-hidden">
-        <MapContainer
-          ref={mapRef}
-          center={[-1.286389, 36.817223]}
-          zoom={7}
-          style={{ height: "100%", width: "100%" }}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-          <FeatureGroup ref={drawRef}>
-            <EditControl
-              position="topright"
-              draw={{
-                rectangle: true,
-                polygon: true,
-                circle: false,
-                circlemarker: false,
-                marker: false,
-                polyline: false,
-              }}
-              onCreated={handleDrawCreated}
-              onDeleted={handleDrawDeleted}
-            />
-          </FeatureGroup>
-
-          {savedFilters.map((f) => (
-            <GeoJSON key={f._id} data={f.geometry} style={{ color: "green" }} />
-          ))}
-        </MapContainer>
-      </div>
-
-      {isPremium && (
-        <div>
-          <h3 className="font-semibold mt-4">Saved Filters</h3>
-          <ul className="space-y-1 text-sm">
-            {savedFilters.map((f) => (
-              <li
-                key={f._id}
-                className="flex justify-between items-center space-x-2"
-              >
-                <button
-                  onClick={() => setBoundsFromGeoJSON(f.geometry)}
-                  className="text-blue-600 underline"
-                >
-                  {f.name}
-                </button>
-                <button
-                  onClick={() => handleDeleteFilter(f._id)}
-                  className="text-red-500 text-sm"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <button
-            onClick={handleSaveFilter}
-            className="mt-2 bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 text-sm"
-          >
-            Save Current Filter
-          </button>
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      
+      <main className="flex-1">
+        {/* Page Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-green-600 text-white py-8">
+          <div className="container mx-auto px-4">
+            <h1 className="text-3xl md:text-4xl font-bold mb-2">Global Climate Datasets</h1>
+            <p className="text-blue-100 text-lg">
+              Click anywhere on the map to get real-time weather data for that location
+            </p>
+          </div>
         </div>
-      )}
 
-      {totalPages > 1 && (
-  <div className="flex items-center justify-center gap-2 my-4">
-    <button
-      onClick={() => setPage((p) => Math.max(p - 1, 1))}
-      disabled={page === 1}
-      className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-    >
-      Prev
-    </button>
+        {/* Main Content */}
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Map Section */}
+            <div className="w-full lg:w-1/3">
+              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 bg-gray-50 border-b">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-800">Interactive World Map</h2>
+                      <p className="text-sm text-gray-600">Click anywhere to get weather data</p>
+                    </div>
+                    {selectedLocation && (
+                      <button
+                        onClick={clearSelection}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                      >
+                        Clear Pin
+                      </button>
+                    )}
+                  </div>
+                  
+                  {selectedLocation && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800">
+                        <span className="font-medium">📍 Selected:</span> {selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)}
+                      </p>
+                      {loadingWeather && (
+                        <p className="text-xs text-blue-600 mt-1">Loading weather data...</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <div
+                  className="h-[500px] cursor-crosshair"
+                  ref={(el) => {
+                    if (el && !mapRef.current) {
+                      // Initialize with world view
+                      const map = L.map(el).setView([20, 0], 2);
 
-    {[...Array(totalPages)].map((_, i) => (
-      <button
-        key={i}
-        onClick={() => setPage(i + 1)}
-        className={`px-3 py-1 rounded ${
-          page === i + 1
-            ? "bg-blue-600 text-white"
-            : "bg-gray-100 hover:bg-gray-200"
-        }`}
-      >
-        {i + 1}
-      </button>
-    ))}
+                      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        attribution: "&copy; OpenStreetMap contributors",
+                      }).addTo(map);
 
-    <button
-      onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-      disabled={page === totalPages}
-      className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-    >
-      Next
-    </button>
-  </div>
-)} 
+                      mapRef.current = map;
 
-  <div className="mt-6">
-  <h3 className="font-bold mb-2">Saved Filters</h3>
-  <div className="flex gap-2 flex-wrap">
-    {saved.map(filter => (
-      <button
-        key={filter._id}
-        className="px-3 py-1 bg-green-100 rounded"
-        onClick={() => {
-          setBounds(turf.bbox(filter.geometry)); // Or setBoundsDirectly
-          setPage(1);
-        }}
-      >
-        {filter.name}
-      </button>
-    ))}
-  </div>
-</div>
+                      // Add click handler
+                      map.on("click", handleMapClick);
+                    }
+                  }}
+                />
+              </div>
+            </div>
 
-<button
-  className="px-2 py-1 bg-blue-500 text-white rounded"
-  onClick={() => {
-    const shape = drawnShape; // from Leaflet-draw
-    const name = prompt("Name this filter?");
-    saveFilter({ name, geometry: shape }).then(() => alert("Saved!"));
-  }}
->
-  Save This Filter
-</button>
+            {/* Datasets Section */}
+            <div className="w-full lg:w-2/3">
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {selectedLocation ? 'Location Weather Data' : 'Available Datasets'}
+                  </h2>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                      {filtered.length} dataset{filtered.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+                
+                {selectedLocation ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-green-800">
+                      <span className="font-medium">🎯 Custom Location:</span> Showing weather data for your selected point and nearby datasets (within 100km)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-800">
+                      <span className="font-medium">🌍 Global Coverage:</span> Click anywhere on the map to get instant weather data for that location
+                    </p>
+                  </div>
+                )}
+              </div>
 
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading climate datasets...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="text-6xl mb-4">🗺️</div>
+                      <h3 className="text-xl font-semibold text-gray-700 mb-2">No datasets found</h3>
+                      <p className="text-gray-500 mb-4">
+                        Click anywhere on the map to get weather data for that location.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4">
+                      {loadingWeather && selectedLocation && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-6">
+                          <div className="flex items-center gap-3">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                            <p className="text-gray-600">Fetching weather data for selected location...</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {filtered.map((d) => (
+                        <DatasetCard key={d._id} dataset={d} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
 
-
-  <div className="mb-4 flex gap-2 items-center">
-  <input
-    type="text"
-    value={query}
-    onChange={(e) => {
-      setQuery(e.target.value);
-      setPage(1); // Reset to page 1 on search
-    }}
-    placeholder="Search by name or description..."
-    className="border rounded px-2 py-1 w-64"
-  />
-
-  <select
-    value={limit}
-    onChange={(e) => {
-      setLimit(Number(e.target.value));
-      setPage(1);
-    }}
-    className="border rounded px-2 py-1"
-  >
-    <option value={6}>6 per page</option>
-    <option value={12}>12 per page</option>
-    <option value={24}>24 per page</option>
-  </select>
-</div>
-
-    <div className="flex gap-2 mt-4">
-      <button
-        onClick={() => handleExport("csv")}
-        className="bg-blue-500 text-white px-3 py-1 rounded"
-  >
-    Export CSV
-      </button>
-      <button
-        onClick={() => handleExport("geojson")}
-        className="bg-green-500 text-white px-3 py-1 rounded"
-      >
-        Export GeoJSON
-      </button>
-</div>
-
-
-      {loading && <Loading />}
-      {error && <Error message={error} />}
-      {!loading && filtered.length === 0 && <p>No datasets match current filter.</p>}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {paginated.map((dataset) => (
-          <DatasetCard key={dataset._id} dataset={dataset} />
-        ))}
-      </div>
+      <Footer />
     </div>
   );
 }

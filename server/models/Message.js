@@ -2,12 +2,30 @@ import mongoose from "mongoose";
 
 const MessageSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    text: { type: String, required: true },
-    emoji: String,
-    tag: { type: String, enum: ["alert", "help", "discussion", ""], default: "" },
-    location: { lat: Number, lng: Number },
-    imageUrl: String,
+    // Use consistent sender naming
+    username: { type: String, required: true },
+
+    // Main message content
+    content: { type: String, required: true },
+
+    // Emoji string (optional)
+    emoji: { type: String, default: "" },
+
+    // Tag enum
+    tag: {
+      type: String,
+      enum: ["alert", "help", "discussion", ""],
+      default: "",
+    },
+
+    // Location object (optional)
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+
+    // Image URL (optional)
+    imageUrl: { type: String, default: "" },
+
+    // Reference to parent message if this is a reply
     parentId: { type: mongoose.Schema.Types.ObjectId, ref: "Message", default: null },
   },
   { timestamps: true }
