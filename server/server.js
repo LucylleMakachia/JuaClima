@@ -6,6 +6,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
 import Message from "./models/message.js";
+import faqRoutes from "./routes/faqs.js";
 import leoProfanity from "leo-profanity";
 
 dotenv.config();
@@ -17,6 +18,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use("/api/faqs", faqRoutes);
 
 // Socket.IO configuration
 const io = new Server(server, {
@@ -65,55 +67,11 @@ if (!OPENWEATHER_API_KEY) {
   console.warn('⚠️ OpenWeather API key not configured');
 }
 
-// Define key locations in Kenya with their coordinates
-const kenyaLocations = [
-  { name: 'Nairobi', lat: -1.2921, lon: 36.8219, region: 'Central Kenya' },
-  { name: 'Mombasa', lat: -4.0435, lon: 39.6682, region: 'Coastal Kenya' },
-  { name: 'Kisumu', lat: -0.1022, lon: 34.7617, region: 'Western Kenya' },
-  { name: 'Nakuru', lat: -0.3031, lon: 36.0800, region: 'Rift Valley' },
-  { name: 'Eldoret', lat: 0.5143, lon: 35.2698, region: 'Western Highlands' },
-  { name: 'Meru', lat: 0.0467, lon: 37.6500, region: 'Mt. Kenya Region' },
-  { name: 'Garissa', lat: -0.4537, lon: 39.6461, region: 'Northern Kenya' },
-  { name: 'Malindi', lat: -3.2194, lon: 40.1169, region: 'Coastal Kenya' },
-  { name: 'Kitale', lat: 1.0157, lon: 35.0062, region: 'Western Highlands' },
-  { name: 'Machakos', lat: -1.5177, lon: 37.2634, region: 'Eastern Kenya' }
-];
-
-// Global cities for initial dataset population
-const globalCities = [
-  // Africa
-  { name: 'Nairobi', country: 'Kenya', lat: -1.2921, lon: 36.8219, region: 'East Africa' },
-  { name: 'Cairo', country: 'Egypt', lat: 30.0444, lon: 31.2357, region: 'North Africa' },
-  { name: 'Lagos', country: 'Nigeria', lat: 6.5244, lon: 3.3792, region: 'West Africa' },
-  { name: 'Cape Town', country: 'South Africa', lat: -33.9249, lon: 18.4241, region: 'Southern Africa' },
-  
-  // Asia
-  { name: 'Tokyo', country: 'Japan', lat: 35.6762, lon: 139.6503, region: 'East Asia' },
-  { name: 'Mumbai', country: 'India', lat: 19.0760, lon: 72.8777, region: 'South Asia' },
-  { name: 'Bangkok', country: 'Thailand', lat: 13.7563, lon: 100.5018, region: 'Southeast Asia' },
-  { name: 'Beijing', country: 'China', lat: 39.9042, lon: 116.4074, region: 'East Asia' },
-  
-  // Europe
-  { name: 'London', country: 'United Kingdom', lat: 51.5074, lon: -0.1278, region: 'Western Europe' },
-  { name: 'Paris', country: 'France', lat: 48.8566, lon: 2.3522, region: 'Western Europe' },
-  { name: 'Berlin', country: 'Germany', lat: 52.5200, lon: 13.4050, region: 'Central Europe' },
-  { name: 'Moscow', country: 'Russia', lat: 55.7558, lon: 37.6173, region: 'Eastern Europe' },
-  
-  // Americas
-  { name: 'New York', country: 'United States', lat: 40.7128, lon: -74.0060, region: 'North America' },
-  { name: 'Los Angeles', country: 'United States', lat: 34.0522, lon: -118.2437, region: 'North America' },
-  { name: 'Mexico City', country: 'Mexico', lat: 19.4326, lon: -99.1332, region: 'North America' },
-  { name: 'São Paulo', country: 'Brazil', lat: -23.5505, lon: -46.6333, region: 'South America' },
-  { name: 'Buenos Aires', country: 'Argentina', lat: -34.6118, lon: -58.3960, region: 'South America' },
-  
-  // Oceania
-  { name: 'Sydney', country: 'Australia', lat: -33.8688, lon: 151.2093, region: 'Oceania' },
-  { name: 'Auckland', country: 'New Zealand', lat: -36.8485, lon: 174.7633, region: 'Oceania' }
-];
-
 // Cache for weather data to reduce API calls
 const weatherCache = new Map();
+const locationCache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const LOCATION_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours for location names
 
 // Utility functions
 const formatDate = (date) => {
@@ -130,110 +88,296 @@ const createBoundingBox = (lon, lat, buffer = 0.1) => ({
   ]]
 });
 
-const isValidCacheEntry = (entry) => {
-  return entry && (Date.now() - entry.timestamp < CACHE_DURATION);
+const isValidCacheEntry = (entry, duration = CACHE_DURATION) => {
+  return entry && (Date.now() - entry.timestamp < duration);
 };
 
-// Enhanced weather data fetching with caching and rate limiting
-async function fetchWeatherData() {
-  if (!OPENWEATHER_API_KEY) {
-    console.warn('⚠️ OpenWeather API key not available');
-    return [];
+// Enhanced coordinate validation
+const isValidCoordinates = (lat, lon) => {
+  const latitude = parseFloat(lat);
+  const longitude = parseFloat(lon);
+  
+  return !isNaN(latitude) && !isNaN(longitude) &&
+         latitude >= -90 && latitude <= 90 &&
+         longitude >= -180 && longitude <= 180;
+};
+
+// Generate cache key for coordinates
+const generateCoordinateKey = (lat, lon) => {
+  const roundedLat = Math.round(parseFloat(lat) * 100) / 100;
+  const roundedLon = Math.round(parseFloat(lon) * 100) / 100;
+  return `coord_${roundedLat}_${roundedLon}`;
+};
+
+// Enhanced location name fetching with caching
+async function getLocationName(lat, lon) {
+  const cacheKey = `location_${Math.round(lat * 100)}_${Math.round(lon * 100)}`;
+  
+  // Check cache first
+  const cachedLocation = locationCache.get(cacheKey);
+  if (isValidCacheEntry(cachedLocation, LOCATION_CACHE_DURATION)) {
+    return cachedLocation.data;
   }
 
   try {
-    const weatherPromises = kenyaLocations.map(async (location) => {
-      const cacheKey = `weather_${location.name.toLowerCase()}`;
+    if (!OPENWEATHER_API_KEY) {
+      return "Unknown Location";
+    }
+
+    const response = await axios.get(
+      `https://api.openweathermap.org/geo/1.0/reverse`,
+      {
+        params: {
+          lat: lat,
+          lon: lon,
+          limit: 1,
+          appid: OPENWEATHER_API_KEY
+        },
+        timeout: 5000
+      }
+    );
+    
+    let locationName = "Unknown Location";
+    if (response.data && response.data[0]) {
+      const geo = response.data[0];
+      locationName = geo.name || "Unknown Location";
       
-      // Check cache first
-      const cachedData = weatherCache.get(cacheKey);
-      if (isValidCacheEntry(cachedData)) {
-        return cachedData.data;
+      if (geo.state && geo.country) {
+        locationName += `, ${geo.state}, ${geo.country}`;
+      } else if (geo.country) {
+        locationName += `, ${geo.country}`;
       }
+    }
 
-      try {
-        const response = await axios.get(
-          `https://api.openweathermap.org/data/2.5/weather`,
-          {
-            params: {
-              lat: location.lat,
-              lon: location.lon,
-              appid: OPENWEATHER_API_KEY,
-              units: 'metric'
-            },
-            timeout: 8000
-          }
-        );
-        
-        const data = response.data;
-        const weatherData = {
-          _id: cacheKey,
-          name: `${location.name} Weather Data`,
-          description: `Real-time weather for ${location.name}, ${location.region}. ${Math.round(data.main.temp)}°C, ${data.weather[0].description}`,
-          location: location.name,
-          region: location.region,
-          coordinates: [location.lon, location.lat],
-          bbox: createBoundingBox(location.lon, location.lat),
-          weather: {
-            temperature: Math.round(data.main.temp * 10) / 10,
-            feels_like: Math.round(data.main.feels_like * 10) / 10,
-            temp_min: Math.round(data.main.temp_min * 10) / 10,
-            temp_max: Math.round(data.main.temp_max * 10) / 10,
-            humidity: data.main.humidity,
-            pressure: data.main.pressure,
-            sea_level: data.main.sea_level,
-            description: data.weather[0].description,
-            main: data.weather[0].main,
-            icon: data.weather[0].icon,
-            wind_speed: Math.round((data.wind?.speed || 0) * 10) / 10,
-            wind_deg: data.wind?.deg,
-            wind_gust: data.wind?.gust ? Math.round(data.wind.gust * 10) / 10 : null,
-            visibility: Math.round((data.visibility || 0) / 1000), // Convert to km
-            cloudiness: data.clouds?.all || 0,
-            sunrise: data.sys.sunrise,
-            sunset: data.sys.sunset,
-            timezone: data.timezone,
-            uv_index: data.uvi || null
-          },
-          tags: ['weather', 'climate', 'real-time', location.region.toLowerCase().replace(/\s+/g, '-')],
-          data_source: 'OpenWeatherMap API',
-          api_version: '2.5',
-          last_updated: new Date().toISOString(),
-          created_at: new Date().toISOString().split('T')[0]
-        };
-
-        // Cache the result
-        weatherCache.set(cacheKey, {
-          data: weatherData,
-          timestamp: Date.now()
-        });
-
-        return weatherData;
-      } catch (error) {
-        console.error(`❌ Error fetching weather for ${location.name}:`, error.message);
-        
-        // Return cached data if available, even if expired
-        const cachedData = weatherCache.get(cacheKey);
-        if (cachedData) {
-          console.log(`🔄 Using cached data for ${location.name}`);
-          return cachedData.data;
-        }
-        
-        return null;
-      }
+    // Cache the result
+    locationCache.set(cacheKey, {
+      data: locationName,
+      timestamp: Date.now()
     });
 
-    const results = await Promise.all(weatherPromises);
-    return results.filter(result => result !== null);
+    return locationName;
   } catch (error) {
-    console.error('❌ Error in fetchWeatherData:', error.message);
+    console.warn("Could not get location name:", error.message);
+    return "Unknown Location";
+  }
+}
+
+// Enhanced weather data fetching for any coordinates
+async function fetchWeatherForCoordinates(lat, lon, locationName = null) {
+  if (!OPENWEATHER_API_KEY) {
+    throw new Error('OpenWeather API key not configured');
+  }
+
+  if (!isValidCoordinates(lat, lon)) {
+    throw new Error('Invalid coordinates provided');
+  }
+
+  const cacheKey = generateCoordinateKey(lat, lon);
+  
+  // Check cache first
+  const cachedData = weatherCache.get(cacheKey);
+  if (isValidCacheEntry(cachedData)) {
+    return cachedData.data;
+  }
+
+  try {
+    // Fetch current weather
+    const weatherResponse = await axios.get(
+      `https://api.openweathermap.org/data/2.5/weather`,
+      {
+        params: {
+          lat: lat,
+          lon: lon,
+          appid: OPENWEATHER_API_KEY,
+          units: 'metric'
+        },
+        timeout: 10000
+      }
+    );
+
+    // Get location name if not provided
+    if (!locationName) {
+      locationName = await getLocationName(lat, lon);
+    }
+
+    const data = weatherResponse.data;
+    const weatherData = {
+      _id: cacheKey,
+      name: `${locationName} Weather Data`,
+      description: `Real-time weather for ${locationName}. ${Math.round(data.main.temp)}°C, ${data.weather[0].description}`,
+      location: locationName,
+      coordinates: [parseFloat(lon), parseFloat(lat)],
+      bbox: createBoundingBox(parseFloat(lon), parseFloat(lat)),
+      weather: {
+        temperature: Math.round(data.main.temp * 10) / 10,
+        feels_like: Math.round(data.main.feels_like * 10) / 10,
+        temp_min: Math.round(data.main.temp_min * 10) / 10,
+        temp_max: Math.round(data.main.temp_max * 10) / 10,
+        humidity: data.main.humidity,
+        pressure: data.main.pressure,
+        sea_level: data.main.sea_level || null,
+        description: data.weather[0].description,
+        main: data.weather[0].main,
+        icon: data.weather[0].icon,
+        wind_speed: Math.round((data.wind?.speed || 0) * 10) / 10,
+        wind_deg: data.wind?.deg || null,
+        wind_gust: data.wind?.gust ? Math.round(data.wind.gust * 10) / 10 : null,
+        visibility: Math.round((data.visibility || 0) / 1000), // Convert to km
+        cloudiness: data.clouds?.all || 0,
+        sunrise: data.sys.sunrise,
+        sunset: data.sys.sunset,
+        timezone: data.timezone,
+        uv_index: null // Will be fetched separately if needed
+      },
+      tags: ['weather', 'real-time', 'global'],
+      data_source: 'OpenWeatherMap API',
+      api_version: '2.5',
+      last_updated: new Date().toISOString(),
+      created_at: new Date().toISOString().split('T')[0]
+    };
+
+    // Try to get UV index from One Call API (if available)
+    try {
+      const uvResponse = await axios.get(
+        `https://api.openweathermap.org/data/2.5/uvi`,
+        {
+          params: {
+            lat: lat,
+            lon: lon,
+            appid: OPENWEATHER_API_KEY
+          },
+          timeout: 5000
+        }
+      );
+      weatherData.weather.uv_index = Math.round(uvResponse.data.value * 10) / 10;
+    } catch (uvError) {
+      // UV index not critical, continue without it
+      console.warn("Could not fetch UV index:", uvError.message);
+    }
+
+    // Cache the result
+    weatherCache.set(cacheKey, {
+      data: weatherData,
+      timestamp: Date.now()
+    });
+
+    return weatherData;
+  } catch (error) {
+    console.error(`❌ Error fetching weather for coordinates ${lat}, ${lon}:`, error.message);
+    
+    // Return cached data if available, even if expired
+    const cachedData = weatherCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`🔄 Using cached data for coordinates ${lat}, ${lon}`);
+      return cachedData.data;
+    }
+    
     throw error;
   }
 }
 
-// Enhanced climate data fetching from NASA Power API
-async function fetchClimateData() {
-  const cacheKey = 'climate_kenya_nasa';
+// Enhanced forecast data fetching
+async function fetchForecastForCoordinates(lat, lon, days = 5) {
+  if (!OPENWEATHER_API_KEY) {
+    throw new Error('OpenWeather API key not configured');
+  }
+
+  if (!isValidCoordinates(lat, lon)) {
+    throw new Error('Invalid coordinates provided');
+  }
+
+  const cacheKey = `forecast_${generateCoordinateKey(lat, lon)}_${days}d`;
+  
+  // Check cache first
+  const cachedData = weatherCache.get(cacheKey);
+  if (isValidCacheEntry(cachedData)) {
+    return cachedData.data;
+  }
+
+  try {
+    const response = await axios.get(
+      `https://api.openweathermap.org/data/2.5/forecast`,
+      {
+        params: {
+          lat: lat,
+          lon: lon,
+          appid: OPENWEATHER_API_KEY,
+          units: 'metric',
+          cnt: days * 8 // 8 forecasts per day (3-hour intervals)
+        },
+        timeout: 10000
+      }
+    );
+
+    const locationName = await getLocationName(lat, lon);
+    const data = response.data;
+
+    const forecastData = {
+      _id: cacheKey,
+      name: `${locationName} ${days}-Day Forecast`,
+      description: `${days}-day weather forecast for ${locationName}`,
+      location: locationName,
+      coordinates: [parseFloat(lon), parseFloat(lat)],
+      bbox: createBoundingBox(parseFloat(lon), parseFloat(lat)),
+      forecast: {
+        list: data.list.map(item => ({
+          dt: item.dt,
+          datetime: new Date(item.dt * 1000).toISOString(),
+          temperature: Math.round(item.main.temp * 10) / 10,
+          feels_like: Math.round(item.main.feels_like * 10) / 10,
+          temp_min: Math.round(item.main.temp_min * 10) / 10,
+          temp_max: Math.round(item.main.temp_max * 10) / 10,
+          humidity: item.main.humidity,
+          pressure: item.main.pressure,
+          description: item.weather[0].description,
+          main: item.weather[0].main,
+          icon: item.weather[0].icon,
+          wind_speed: Math.round((item.wind?.speed || 0) * 10) / 10,
+          wind_deg: item.wind?.deg || null,
+          cloudiness: item.clouds?.all || 0,
+          precipitation: {
+            rain_3h: item.rain?.['3h'] || 0,
+            snow_3h: item.snow?.['3h'] || 0
+          },
+          visibility: Math.round((item.visibility || 0) / 1000),
+          pop: Math.round((item.pop || 0) * 100) // Probability of precipitation as percentage
+        })),
+        city: {
+          name: data.city.name,
+          country: data.city.country,
+          coordinates: [data.city.coord.lon, data.city.coord.lat],
+          timezone: data.city.timezone,
+          sunrise: data.city.sunrise,
+          sunset: data.city.sunset
+        }
+      },
+      tags: ['forecast', 'multi-day', 'global'],
+      data_source: 'OpenWeatherMap API',
+      api_version: '2.5',
+      last_updated: new Date().toISOString(),
+      created_at: new Date().toISOString().split('T')[0]
+    };
+
+    // Cache the result
+    weatherCache.set(cacheKey, {
+      data: forecastData,
+      timestamp: Date.now()
+    });
+
+    return forecastData;
+  } catch (error) {
+    console.error(`❌ Error fetching forecast for coordinates ${lat}, ${lon}:`, error.message);
+    throw error;
+  }
+}
+
+// Enhanced climate data fetching from NASA Power API for any location
+async function fetchClimateDataForCoordinates(lat, lon, days = 30) {
+  if (!isValidCoordinates(lat, lon)) {
+    throw new Error('Invalid coordinates provided');
+  }
+
+  const cacheKey = `climate_${generateCoordinateKey(lat, lon)}_${days}d`;
   const cachedData = weatherCache.get(cacheKey);
   
   if (isValidCacheEntry(cachedData)) {
@@ -243,13 +387,13 @@ async function fetchClimateData() {
   try {
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 30); // Last 30 days for better data
+    startDate.setDate(endDate.getDate() - days);
     
     const params = {
-      parameters: 'T2M,PRECTOTCORR,WS2M,RH2M,ALLSKY_SFC_SW_DWN',
+      parameters: 'T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,WS2M,RH2M,ALLSKY_SFC_SW_DWN,PS',
       community: 'AG',
-      longitude: 37.9,
-      latitude: -0.8,
+      longitude: parseFloat(lon),
+      latitude: parseFloat(lat),
       start: formatDate(startDate),
       end: formatDate(endDate),
       format: 'JSON'
@@ -261,41 +405,52 @@ async function fetchClimateData() {
     });
     
     const data = response.data.properties.parameter;
+    const locationName = await getLocationName(lat, lon);
     
     // Calculate statistics
     const tempValues = Object.values(data.T2M || {});
+    const tempMinValues = Object.values(data.T2M_MIN || {});
+    const tempMaxValues = Object.values(data.T2M_MAX || {});
     const precipValues = Object.values(data.PRECTOTCORR || {});
     const windValues = Object.values(data.WS2M || {});
     const humidityValues = Object.values(data.RH2M || {});
     const solarValues = Object.values(data.ALLSKY_SFC_SW_DWN || {});
+    const pressureValues = Object.values(data.PS || {});
     
-    const avgTemp = tempValues.reduce((a, b) => a + b, 0) / tempValues.length;
-    const totalPrecip = precipValues.reduce((a, b) => a + b, 0);
-    const avgWindSpeed = windValues.reduce((a, b) => a + b, 0) / windValues.length;
-    const avgHumidity = humidityValues.reduce((a, b) => a + b, 0) / humidityValues.length;
-    const avgSolarRadiation = solarValues.reduce((a, b) => a + b, 0) / solarValues.length;
+    const avgTemp = tempValues.length > 0 ? tempValues.reduce((a, b) => a + b, 0) / tempValues.length : null;
+    const avgTempMin = tempMinValues.length > 0 ? tempMinValues.reduce((a, b) => a + b, 0) / tempMinValues.length : null;
+    const avgTempMax = tempMaxValues.length > 0 ? tempMaxValues.reduce((a, b) => a + b, 0) / tempMaxValues.length : null;
+    const totalPrecip = precipValues.length > 0 ? precipValues.reduce((a, b) => a + b, 0) : null;
+    const avgWindSpeed = windValues.length > 0 ? windValues.reduce((a, b) => a + b, 0) / windValues.length : null;
+    const avgHumidity = humidityValues.length > 0 ? humidityValues.reduce((a, b) => a + b, 0) / humidityValues.length : null;
+    const avgSolarRadiation = solarValues.length > 0 ? solarValues.reduce((a, b) => a + b, 0) / solarValues.length : null;
+    const avgPressure = pressureValues.length > 0 ? pressureValues.reduce((a, b) => a + b, 0) / pressureValues.length : null;
     
     const climateData = {
       _id: cacheKey,
-      name: 'Kenya Climate Data (NASA POWER)',
-      description: `Satellite climate data for central Kenya. 30-day avg: ${Math.round(avgTemp)}°C, Total precipitation: ${Math.round(totalPrecip)}mm`,
-      bbox: createBoundingBox(37.9, -0.8, 2.0), // Larger bounding box for Kenya
-      coordinates: [37.9, -0.8],
+      name: `${locationName} Climate Data (NASA POWER)`,
+      description: `${days}-day satellite climate data for ${locationName}. Avg: ${avgTemp ? Math.round(avgTemp) + '°C' : 'N/A'}, Total precipitation: ${totalPrecip ? Math.round(totalPrecip) + 'mm' : 'N/A'}`,
+      location: locationName,
+      coordinates: [parseFloat(lon), parseFloat(lat)],
+      bbox: createBoundingBox(parseFloat(lon), parseFloat(lat), 0.5),
       climate_data: {
-        avg_temperature: Math.round(avgTemp * 10) / 10,
-        total_precipitation: Math.round(totalPrecip * 10) / 10,
-        avg_wind_speed: Math.round(avgWindSpeed * 10) / 10,
-        avg_humidity: Math.round(avgHumidity * 10) / 10,
-        avg_solar_radiation: Math.round(avgSolarRadiation * 10) / 10,
+        avg_temperature: avgTemp ? Math.round(avgTemp * 10) / 10 : null,
+        avg_temperature_min: avgTempMin ? Math.round(avgTempMin * 10) / 10 : null,
+        avg_temperature_max: avgTempMax ? Math.round(avgTempMax * 10) / 10 : null,
+        total_precipitation: totalPrecip ? Math.round(totalPrecip * 10) / 10 : null,
+        avg_wind_speed: avgWindSpeed ? Math.round(avgWindSpeed * 10) / 10 : null,
+        avg_humidity: avgHumidity ? Math.round(avgHumidity * 10) / 10 : null,
+        avg_solar_radiation: avgSolarRadiation ? Math.round(avgSolarRadiation * 10) / 10 : null,
+        avg_pressure: avgPressure ? Math.round(avgPressure * 10) / 10 : null,
         period: `${formatDate(startDate)} to ${formatDate(endDate)}`,
         days_of_data: tempValues.length,
         data_quality: {
-          temperature: tempValues.length > 20 ? 'good' : 'limited',
-          precipitation: precipValues.length > 20 ? 'good' : 'limited',
-          wind: windValues.length > 20 ? 'good' : 'limited'
+          temperature: tempValues.length > (days * 0.8) ? 'good' : tempValues.length > (days * 0.5) ? 'fair' : 'limited',
+          precipitation: precipValues.length > (days * 0.8) ? 'good' : precipValues.length > (days * 0.5) ? 'fair' : 'limited',
+          wind: windValues.length > (days * 0.8) ? 'good' : windValues.length > (days * 0.5) ? 'fair' : 'limited'
         }
       },
-      tags: ['climate', 'satellite', 'nasa', 'historical', 'kenya', 'power-api'],
+      tags: ['climate', 'satellite', 'nasa', 'historical', 'global', 'power-api'],
       data_source: 'NASA POWER API',
       api_version: '2.1',
       last_updated: new Date().toISOString(),
@@ -310,12 +465,12 @@ async function fetchClimateData() {
 
     return climateData;
   } catch (error) {
-    console.error('❌ Error fetching NASA climate data:', error.message);
+    console.error(`❌ Error fetching NASA climate data for coordinates ${lat}, ${lon}:`, error.message);
     
     // Return cached data if available
     const cachedData = weatherCache.get(cacheKey);
     if (cachedData) {
-      console.log('🔄 Using cached NASA climate data');
+      console.log(`🔄 Using cached NASA climate data for coordinates ${lat}, ${lon}`);
       return cachedData.data;
     }
     
@@ -459,16 +614,40 @@ io.on("connection", (socket) => {
   });
 });
 
-// Clean up inactive connections periodically
+// Clean up inactive connections and caches periodically
 setInterval(() => {
   const now = new Date();
   const inactiveThreshold = 60 * 60 * 1000; // 1 hour
+  const cacheThreshold = 60 * 60 * 1000; // 1 hour for old cache entries
 
+  // Clean up inactive users
   for (const [socketId, user] of onlineUsers.entries()) {
     if (now - user.lastActivity > inactiveThreshold) {
       console.log(`🧹 Cleaning up inactive user: ${socketId}`);
       onlineUsers.delete(socketId);
     }
+  }
+
+  // Clean up old cache entries
+  let cleanedWeatherCache = 0;
+  let cleanedLocationCache = 0;
+  
+  for (const [key, entry] of weatherCache.entries()) {
+    if (now - entry.timestamp > cacheThreshold) {
+      weatherCache.delete(key);
+      cleanedWeatherCache++;
+    }
+  }
+  
+  for (const [key, entry] of locationCache.entries()) {
+    if (now - entry.timestamp > LOCATION_CACHE_DURATION) {
+      locationCache.delete(key);
+      cleanedLocationCache++;
+    }
+  }
+
+  if (cleanedWeatherCache > 0 || cleanedLocationCache > 0) {
+    console.log(`🧹 Cleaned ${cleanedWeatherCache} weather cache entries and ${cleanedLocationCache} location cache entries`);
   }
 }, 15 * 60 * 1000); // Check every 15 minutes
 
@@ -477,127 +656,173 @@ setInterval(() => {
 // Root endpoint
 app.get("/", (req, res) => {
   res.json({
-    service: "JuaClima Chat Server",
+    service: "JuaClima Global Weather Server",
     status: "running",
-    version: "2.0.0",
+    version: "3.0.0",
+    description: "Global weather and climate data API supporting any location on Earth",
     timestamp: new Date().toISOString(),
     endpoints: {
       health: "/api/health",
-      datasets: "/api/datasets",
-      single_dataset: "/api/datasets/:id",
-      weather_location: "/api/weather/location",
-      global_cities: "/api/weather/global-cities",
+      weather_by_coordinates: "/api/weather/coordinates?lat={lat}&lon={lon}",
+      forecast_by_coordinates: "/api/weather/forecast?lat={lat}&lon={lon}&days={days}",
+      climate_by_coordinates: "/api/climate/coordinates?lat={lat}&lon={lon}&days={days}",
+      weather_by_location: "/api/weather/location?q={city_name}",
+      datasets_by_area: "/api/datasets/area?lat={lat}&lon={lon}&radius={km}",
       stats: "/api/stats"
-    }
+    },
+    features: [
+      "Global weather data for any coordinates",
+      "5-day weather forecasts",
+      "Historical climate data via NASA POWER API",
+      "Location name resolution",
+      "Intelligent caching system",
+      "Real-time chat integration"
+    ]
   });
 });
 
-// Get weather data for global cities
-async function fetchGlobalCitiesWeather() {
-  if (!OPENWEATHER_API_KEY) {
-    console.warn('⚠️ OpenWeather API key not available for global cities');
-    return [];
-  }
-
+// Get weather data by coordinates (enhanced)
+app.get("/api/weather/coordinates", async (req, res) => {
   try {
-    const weatherPromises = globalCities.map(async (city) => {
-      const cacheKey = `global_${city.name.toLowerCase().replace(' ', '_')}_${city.country.toLowerCase().replace(' ', '_')}`;
-      
-      // Check cache first
-      const cachedData = weatherCache.get(cacheKey);
-      if (isValidCacheEntry(cachedData)) {
-        return cachedData.data;
-      }
-
-      try {
-        const response = await axios.get(
-          `https://api.openweathermap.org/data/2.5/weather`,
-          {
-            params: {
-              lat: city.lat,
-              lon: city.lon,
-              appid: OPENWEATHER_API_KEY,
-              units: 'metric'
-            },
-            timeout: 8000
-          }
-        );
-        
-        const data = response.data;
-        const weatherData = {
-          _id: cacheKey,
-          name: `${city.name} Weather Data`,
-          description: `Real-time weather data for ${city.name}, ${city.country}. Current: ${Math.round(data.main.temp)}°C, ${data.weather[0].description}`,
-          location: city.name,
-          country: city.country,
-          region: city.region,
-          coordinates: [city.lon, city.lat],
-          bbox: createBoundingBox(city.lon, city.lat, 0.5),
-          weather: {
-            temperature: Math.round(data.main.temp * 10) / 10,
-            feels_like: Math.round(data.main.feels_like * 10) / 10,
-            temp_min: Math.round(data.main.temp_min * 10) / 10,
-            temp_max: Math.round(data.main.temp_max * 10) / 10,
-            humidity: data.main.humidity,
-            pressure: data.main.pressure,
-            sea_level: data.main.sea_level,
-            description: data.weather[0].description,
-            main: data.weather[0].main,
-            icon: data.weather[0].icon,
-            wind_speed: Math.round((data.wind?.speed || 0) * 10) / 10,
-            wind_deg: data.wind?.deg,
-            wind_gust: data.wind?.gust ? Math.round(data.wind.gust * 10) / 10 : null,
-            visibility: Math.round((data.visibility || 0) / 1000),
-            cloudiness: data.clouds?.all || 0,
-            sunrise: data.sys.sunrise,
-            sunset: data.sys.sunset,
-            timezone: data.timezone
-          },
-          tags: ['weather', 'global', 'real-time', city.region.toLowerCase().replace(/\s+/g, '-')],
-          data_source: 'OpenWeatherMap API',
-          api_version: '2.5',
-          last_updated: new Date().toISOString(),
-          created_at: new Date().toISOString().split('T')[0]
-        };
-
-        // Cache the result
-        weatherCache.set(cacheKey, {
-          data: weatherData,
-          timestamp: Date.now()
-        });
-
-        return weatherData;
-      } catch (error) {
-        console.error(`❌ Error fetching weather for ${city.name}, ${city.country}:`, error.message);
-        
-        // Return cached data if available, even if expired
-        const cachedData = weatherCache.get(cacheKey);
-        if (cachedData) {
-          console.log(`🔄 Using cached data for ${city.name}, ${city.country}`);
-          return cachedData.data;
-        }
-        
-        return null;
-      }
-    });
-
-    const results = await Promise.all(weatherPromises);
-    return results.filter(result => result !== null);
-  } catch (error) {
-    console.error('❌ Error in fetchGlobalCitiesWeather:', error.message);
-    throw error;
-  }
-}
-
-// Get weather data for any location (for pin-clicked locations)
-app.get("/api/weather/location", async (req, res) => {
-  try {
-    const { lat, lng } = req.query;
+    const { lat, lon } = req.query;
     
-    if (!lat || !lng) {
+    if (!lat || !lon) {
       return res.status(400).json({
         success: false,
-        message: "Latitude and longitude are required"
+        message: "Latitude and longitude are required",
+        example: "/api/weather/coordinates?lat=-1.2921&lon=36.8219"
+      });
+    }
+
+    if (!isValidCoordinates(lat, lon)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180",
+        provided: { lat, lon }
+      });
+    }
+
+    const weatherData = await fetchWeatherForCoordinates(lat, lon);
+
+    res.json({
+      success: true,
+      data: weatherData,
+      coordinates: [parseFloat(lon), parseFloat(lat)],
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error fetching weather by coordinates:', error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching weather data",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Get weather forecast by coordinates
+app.get("/api/weather/forecast", async (req, res) => {
+  try {
+    const { lat, lon, days = 5 } = req.query;
+    
+    if (!lat || !lon) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude are required",
+        example: "/api/weather/forecast?lat=-1.2921&lon=36.8219&days=5"
+      });
+    }
+
+    if (!isValidCoordinates(lat, lon)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid coordinates",
+        provided: { lat, lon }
+      });
+    }
+
+    const forecastDays = Math.min(Math.max(parseInt(days) || 5, 1), 5); // Max 5 days
+    const forecastData = await fetchForecastForCoordinates(lat, lon, forecastDays);
+
+    res.json({
+      success: true,
+      data: forecastData,
+      coordinates: [parseFloat(lon), parseFloat(lat)],
+      forecast_days: forecastDays,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error fetching forecast by coordinates:', error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching forecast data",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Get climate data by coordinates
+app.get("/api/climate/coordinates", async (req, res) => {
+  try {
+    const { lat, lon, days = 30 } = req.query;
+    
+    if (!lat || !lon) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude are required",
+        example: "/api/climate/coordinates?lat=-1.2921&lon=36.8219&days=30"
+      });
+    }
+
+    if (!isValidCoordinates(lat, lon)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid coordinates",
+        provided: { lat, lon }
+      });
+    }
+
+    const climateDays = Math.min(Math.max(parseInt(days) || 30, 7), 365); // 7 days to 1 year
+    const climateData = await fetchClimateDataForCoordinates(lat, lon, climateDays);
+
+    if (!climateData) {
+      return res.status(503).json({
+        success: false,
+        message: "Climate data service temporarily unavailable",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      data: climateData,
+      coordinates: [parseFloat(lon), parseFloat(lat)],
+      climate_days: climateDays,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error fetching climate by coordinates:', error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching climate data",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Get weather data by location name (city search)
+app.get("/api/weather/location", async (req, res) => {
+  try {
+    const { q: query, country, state } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Location query is required",
+        example: "/api/weather/location?q=Nairobi&country=KE"
       });
     }
 
@@ -608,76 +833,57 @@ app.get("/api/weather/location", async (req, res) => {
       });
     }
 
-    const response = await axios.get(
-      `https://api.openweathermap.org/data/2.5/weather`,
+    // First, geocode the location
+    const geocodeParams = {
+      q: query,
+      limit: 1,
+      appid: OPENWEATHER_API_KEY
+    };
+
+    if (country) geocodeParams.q += `,${country}`;
+    if (state) geocodeParams.q += `,${state}`;
+
+    const geocodeResponse = await axios.get(
+      `https://api.openweathermap.org/geo/1.0/direct`,
       {
-        params: {
-          lat: lat,
-          lon: lng,
-          appid: OPENWEATHER_API_KEY,
-          units: 'metric'
-        },
+        params: geocodeParams,
         timeout: 8000
       }
     );
-    
-    const data = response.data;
-    
-    // Get location name using reverse geocoding
-    let locationName = "Unknown Location";
-    try {
-      const geoResponse = await axios.get(
-        `https://api.openweathermap.org/geo/1.0/reverse`,
-        {
-          params: {
-            lat: lat,
-            lon: lng,
-            limit: 1,
-            appid: OPENWEATHER_API_KEY
-          },
-          timeout: 5000
-        }
-      );
-      
-      if (geoResponse.data && geoResponse.data[0]) {
-        const geo = geoResponse.data[0];
-        locationName = geo.name;
-        if (geo.country) {
-          locationName += `, ${geo.country}`;
-        }
-      }
-    } catch (geoError) {
-      console.warn("Could not get location name:", geoError.message);
+
+    if (!geocodeResponse.data || geocodeResponse.data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Location not found",
+        query: query,
+        suggestions: [
+          "Try using more specific location names",
+          "Include country code (e.g., 'Paris,FR')",
+          "Check spelling of the location name"
+        ]
+      });
     }
 
-    const weather = {
-      location: locationName,
-      temperature: Math.round(data.main.temp * 10) / 10,
-      feels_like: Math.round(data.main.feels_like * 10) / 10,
-      temp_min: Math.round(data.main.temp_min * 10) / 10,
-      temp_max: Math.round(data.main.temp_max * 10) / 10,
-      humidity: data.main.humidity,
-      pressure: data.main.pressure,
-      description: data.weather[0].description,
-      main: data.weather[0].main,
-      icon: data.weather[0].icon,
-      wind_speed: Math.round((data.wind?.speed || 0) * 10) / 10,
-      wind_deg: data.wind?.deg,
-      visibility: Math.round((data.visibility || 0) / 1000),
-      cloudiness: data.clouds?.all || 0,
-      sunrise: data.sys.sunrise,
-      sunset: data.sys.sunset,
-      coordinates: [parseFloat(lng), parseFloat(lat)]
-    };
+    const location = geocodeResponse.data[0];
+    const weatherData = await fetchWeatherForCoordinates(
+      location.lat, 
+      location.lon, 
+      `${location.name}${location.country ? ', ' + location.country : ''}`
+    );
 
     res.json({
       success: true,
-      weather: weather,
-      location: locationName,
+      data: weatherData,
+      location_info: {
+        name: location.name,
+        country: location.country,
+        state: location.state,
+        coordinates: [location.lon, location.lat]
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error fetching location weather:', error.message);
+    console.error('❌ Error fetching weather by location:', error.message);
     res.status(500).json({
       success: false,
       message: "Error fetching weather data",
@@ -687,258 +893,438 @@ app.get("/api/weather/location", async (req, res) => {
   }
 });
 
-// Get weather data for major global cities
-app.get("/api/weather/global-cities", async (req, res) => {
+// Get multiple datasets for an area (radius-based search)
+app.get("/api/datasets/area", async (req, res) => {
   try {
-    console.log("📡 Fetching global cities weather data...");
-    const startTime = Date.now();
+    const { lat, lon, radius = 50, include = 'weather,climate' } = req.query;
     
-    const globalWeatherData = await fetchGlobalCitiesWeather();
-    console.log(`✅ Fetched weather data for ${globalWeatherData.length} global cities`);
+    if (!lat || !lon) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude are required",
+        example: "/api/datasets/area?lat=-1.2921&lon=36.8219&radius=100&include=weather,climate,forecast"
+      });
+    }
 
-    const responseTime = Date.now() - startTime;
+    if (!isValidCoordinates(lat, lon)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid coordinates",
+        provided: { lat, lon }
+      });
+    }
+
+    const radiusKm = Math.min(Math.max(parseInt(radius) || 50, 1), 500); // 1km to 500km
+    const includeTypes = include.split(',').map(type => type.trim().toLowerCase());
+    
+    const datasets = [];
+    const promises = [];
+
+    // Generate points in a grid around the center
+    const gridSize = Math.min(Math.ceil(radiusKm / 50), 5); // Max 5x5 grid
+    const latStep = (radiusKm / 111000) / gridSize; // Approximate degrees per km
+    const lonStep = (radiusKm / (111000 * Math.cos(lat * Math.PI / 180))) / gridSize;
+
+    for (let i = -gridSize; i <= gridSize; i++) {
+      for (let j = -gridSize; j <= gridSize; j++) {
+        const pointLat = parseFloat(lat) + (i * latStep);
+        const pointLon = parseFloat(lon) + (j * lonStep);
+        
+        // Calculate distance from center
+        const distance = Math.sqrt(
+          Math.pow((pointLat - lat) * 111000, 2) + 
+          Math.pow((pointLon - lon) * 111000 * Math.cos(lat * Math.PI / 180), 2)
+        ) / 1000;
+        
+        if (distance <= radiusKm) {
+          if (includeTypes.includes('weather')) {
+            promises.push(
+              fetchWeatherForCoordinates(pointLat, pointLon)
+                .then(data => ({ ...data, distance: Math.round(distance), type: 'weather' }))
+                .catch(err => null)
+            );
+          }
+          
+          if (includeTypes.includes('climate')) {
+            promises.push(
+              fetchClimateDataForCoordinates(pointLat, pointLon, 30)
+                .then(data => data ? { ...data, distance: Math.round(distance), type: 'climate' } : null)
+                .catch(err => null)
+            );
+          }
+        }
+      }
+    }
+
+    const results = await Promise.all(promises);
+    const validResults = results.filter(result => result !== null);
 
     res.json({
       success: true,
-      datasets: globalWeatherData,
+      datasets: validResults,
       metadata: {
-        count: globalWeatherData.length,
-        response_time_ms: responseTime,
-        cache_info: {
-          weather_cache_size: weatherCache.size,
-          cache_duration_minutes: CACHE_DURATION / (60 * 1000)
-        }
+        center_coordinates: [parseFloat(lon), parseFloat(lat)],
+        search_radius_km: radiusKm,
+        total_datasets: validResults.length,
+        types_included: includeTypes,
+        grid_size: `${gridSize * 2 + 1}x${gridSize * 2 + 1}`,
+        coverage_area_km2: Math.round(Math.PI * Math.pow(radiusKm, 2))
       },
-      last_updated: new Date().toISOString()
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error fetching global cities weather:', error.message);
+    console.error('❌ Error fetching area datasets:', error.message);
     res.status(500).json({
       success: false,
-      message: "Error fetching global weather data",
+      message: "Error fetching area datasets",
       error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// Enhanced datasets endpoint with global cities
-app.get("/api/datasets", async (req, res) => {
+// Search locations (geocoding endpoint)
+app.get("/api/locations/search", async (req, res) => {
   try {
-    console.log("📡 Fetching weather and climate data...");
-    const startTime = Date.now();
+    const { q: query, limit = 5 } = req.query;
     
-    // Fetch Kenya weather data
-    const kenyaWeather = await fetchWeatherData();
-    console.log(`✅ Fetched weather data for ${kenyaWeather.length} Kenya locations`);
-    
-    // Fetch global cities weather data
-    const globalWeather = await fetchGlobalCitiesWeather();
-    console.log(`✅ Fetched weather data for ${globalWeather.length} global cities`);
-    
-    // Fetch climate data (optional)
-    const climateData = await fetchClimateData();
-    const climateStatus = climateData ? "✅ Fetched NASA climate data" : "⚠️ NASA climate data unavailable";
-    console.log(climateStatus);
-    
-    // Combine all datasets
-    const allDatasets = [
-      ...kenyaWeather,
-      ...globalWeather,
-      ...(climateData ? [climateData] : [])
-    ];
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required",
+        example: "/api/locations/search?q=london&limit=5"
+      });
+    }
 
-    const responseTime = Date.now() - startTime;
+    if (!OPENWEATHER_API_KEY) {
+      return res.status(503).json({
+        success: false,
+        message: "Location search service unavailable - API key not configured"
+      });
+    }
 
-    res.json({
-      success: true,
-      datasets: allDatasets,
-      metadata: {
-        total_count: allDatasets.length,
-        kenya_locations: kenyaWeather.length,
-        global_cities: globalWeather.length,
-        has_climate_data: !!climateData,
-        response_time_ms: responseTime,
-        cache_info: {
-          weather_cache_size: weatherCache.size,
-          cache_duration_minutes: CACHE_DURATION / (60 * 1000)
-        }
-      },
-      last_updated: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('❌ Error in /api/datasets:', error.message);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching datasets",
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+    const searchLimit = Math.min(Math.max(parseInt(limit) || 5, 1), 10);
 
-// Enhanced single dataset endpoint
-app.get("/api/datasets/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    if (id.startsWith('weather_')) {
-      const locationName = id.replace('weather_', '');
-      const location = kenyaLocations.find(loc => 
-        loc.name.toLowerCase() === locationName.toLowerCase()
-      );
-      
-      if (!location) {
-        return res.status(404).json({
-          success: false,
-          message: "Weather location not found",
-          available_locations: kenyaLocations.map(loc => loc.name.toLowerCase())
-        });
-      }
-      
-      // Check cache first
-      const cachedData = weatherCache.get(id);
-      if (isValidCacheEntry(cachedData)) {
-        return res.json({
-          success: true,
-          dataset: cachedData.data,
-          cached: true,
-          cache_age_minutes: Math.round((Date.now() - cachedData.timestamp) / (60 * 1000))
-        });
-      }
-
-      // Fetch fresh data
-      if (!OPENWEATHER_API_KEY) {
-        return res.status(503).json({
-          success: false,
-          message: "Weather service unavailable - API key not configured"
-        });
-      }
-
-      const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/weather`,
-        {
-          params: {
-            lat: location.lat,
-            lon: location.lon,
-            appid: OPENWEATHER_API_KEY,
-            units: 'metric'
-          },
-          timeout: 8000
-        }
-      );
-      
-      const data = response.data;
-      const dataset = {
-        _id: id,
-        name: `${location.name} Weather Data`,
-        description: `Detailed weather information for ${location.name}, ${location.region}`,
-        location: location.name,
-        region: location.region,
-        coordinates: [location.lon, location.lat],
-        weather: {
-          temperature: Math.round(data.main.temp * 10) / 10,
-          feels_like: Math.round(data.main.feels_like * 10) / 10,
-          temp_min: Math.round(data.main.temp_min * 10) / 10,
-          temp_max: Math.round(data.main.temp_max * 10) / 10,
-          humidity: data.main.humidity,
-          pressure: data.main.pressure,
-          description: data.weather[0].description,
-          main: data.weather[0].main,
-          icon: data.weather[0].icon,
-          wind_speed: Math.round((data.wind?.speed || 0) * 10) / 10,
-          wind_deg: data.wind?.deg,
-          visibility: Math.round((data.visibility || 0) / 1000),
-          cloudiness: data.clouds?.all || 0,
-          sunrise: data.sys.sunrise,
-          sunset: data.sys.sunset
+    const response = await axios.get(
+      `https://api.openweathermap.org/geo/1.0/direct`,
+      {
+        params: {
+          q: query,
+          limit: searchLimit,
+          appid: OPENWEATHER_API_KEY
         },
-        last_updated: new Date().toISOString(),
-        cached: false
-      };
-      
-      // Cache the result
-      weatherCache.set(id, {
-        data: dataset,
-        timestamp: Date.now()
-      });
-      
-      return res.json({
-        success: true,
-        dataset
-      });
-    }
-    
-    if (id === 'climate_kenya_nasa') {
-      const climateData = await fetchClimateData();
-      if (!climateData) {
-        return res.status(503).json({
-          success: false,
-          message: "Climate data service temporarily unavailable"
-        });
+        timeout: 8000
       }
-      
-      return res.json({
-        success: true,
-        dataset: climateData
-      });
-    }
-    
-    res.status(404).json({
-      success: false,
-      message: "Dataset not found",
-      available_prefixes: ["weather_", "climate_kenya_nasa"]
+    );
+
+    const locations = response.data.map(location => ({
+      name: location.name,
+      country: location.country,
+      state: location.state,
+      coordinates: [location.lon, location.lat],
+      local_names: location.local_names || {}
+    }));
+
+    res.json({
+      success: true,
+      locations: locations,
+      query: query,
+      count: locations.length,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error fetching single dataset:', error.message);
+    console.error('❌ Error searching locations:', error.message);
     res.status(500).json({
       success: false,
-      message: "Error fetching dataset",
+      message: "Error searching locations",
       error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// Server statistics endpoint
+// Batch weather data endpoint
+app.post("/api/weather/batch", async (req, res) => {
+  try {
+    const { coordinates } = req.body;
+    
+    if (!coordinates || !Array.isArray(coordinates)) {
+      return res.status(400).json({
+        success: false,
+        message: "Array of coordinates is required",
+        example: {
+          coordinates: [
+            { lat: -1.2921, lon: 36.8219, name: "Nairobi" },
+            { lat: 51.5074, lon: -0.1278, name: "London" }
+          ]
+        }
+      });
+    }
+
+    if (coordinates.length > 20) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 20 locations allowed per batch request"
+      });
+    }
+
+    const promises = coordinates.map(async (coord, index) => {
+      try {
+        if (!isValidCoordinates(coord.lat, coord.lon)) {
+          return {
+            index,
+            success: false,
+            error: "Invalid coordinates",
+            coordinates: coord
+          };
+        }
+
+        const weatherData = await fetchWeatherForCoordinates(
+          coord.lat, 
+          coord.lon, 
+          coord.name
+        );
+
+        return {
+          index,
+          success: true,
+          data: weatherData,
+          coordinates: coord
+        };
+      } catch (error) {
+        return {
+          index,
+          success: false,
+          error: error.message,
+          coordinates: coord
+        };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    const successful = results.filter(r => r.success);
+    const failed = results.filter(r => !r.success);
+
+    res.json({
+      success: true,
+      results: results,
+      summary: {
+        total_requested: coordinates.length,
+        successful: successful.length,
+        failed: failed.length,
+        success_rate: Math.round((successful.length / coordinates.length) * 100)
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error in batch weather request:', error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error processing batch weather request",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Enhanced server statistics endpoint
 app.get("/api/stats", (req, res) => {
   res.json({
     success: true,
     stats: {
-      online_users: onlineUsers.size,
-      cache_entries: weatherCache.size,
-      server_uptime: process.uptime(),
-      memory_usage: process.memoryUsage(),
-      locations_available: kenyaLocations.length,
-      global_cities_available: globalCities.length,
+      server: {
+        online_users: onlineUsers.size,
+        uptime_seconds: Math.floor(process.uptime()),
+        uptime_human: formatUptime(process.uptime()),
+        version: "3.0.0"
+      },
+      cache: {
+        weather_cache_entries: weatherCache.size,
+        location_cache_entries: locationCache.size,
+        cache_duration_minutes: CACHE_DURATION / (60 * 1000),
+        location_cache_duration_hours: LOCATION_CACHE_DURATION / (60 * 60 * 1000)
+      },
+      memory: {
+        ...process.memoryUsage(),
+        memory_usage_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+      },
       services: {
         mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        openweather: !!OPENWEATHER_API_KEY ? 'configured' : 'not_configured'
+        openweather_api: !!OPENWEATHER_API_KEY ? 'configured' : 'not_configured',
+        nasa_power_api: 'available'
+      },
+      features: {
+        global_weather: true,
+        climate_data: true,
+        forecasts: true,
+        location_search: !!OPENWEATHER_API_KEY,
+        batch_requests: true,
+        area_datasets: true
       }
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// Health check endpoint
+// Helper function to format uptime
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  return `${days}d ${hours}h ${minutes}m ${secs}s`;
+}
+
+// Enhanced health check endpoint
 app.get("/api/health", async (req, res) => {
   const health = {
     status: "healthy",
-    service: "JuaClima API",
-    version: "2.0.0",
+    service: "JuaClima Global Weather API",
+    version: "3.0.0",
     timestamp: new Date().toISOString(),
     checks: {
       database: mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy',
       weather_api: OPENWEATHER_API_KEY ? 'configured' : 'not_configured',
       memory: process.memoryUsage().heapUsed < 1000000000 ? 'healthy' : 'high', // 1GB threshold
-      uptime: process.uptime()
+      uptime: process.uptime(),
+      cache_health: weatherCache.size < 10000 ? 'healthy' : 'high' // 10k entries threshold
+    },
+    capabilities: {
+      global_coverage: true,
+      real_time_weather: !!OPENWEATHER_API_KEY,
+      forecasts: !!OPENWEATHER_API_KEY,
+      climate_data: true,
+      location_search: !!OPENWEATHER_API_KEY,
+      batch_processing: true
     }
   };
 
+  // Test API connectivity if configured
+  if (OPENWEATHER_API_KEY) {
+    try {
+      await axios.get(
+        `https://api.openweathermap.org/data/2.5/weather`,
+        {
+          params: {
+            lat: 0,
+            lon: 0,
+            appid: OPENWEATHER_API_KEY
+          },
+          timeout: 5000
+        }
+      );
+      health.checks.api_connectivity = 'healthy';
+    } catch (error) {
+      health.checks.api_connectivity = 'unhealthy';
+      health.status = "degraded";
+    }
+  }
+
   const isHealthy = health.checks.database === 'healthy' && 
-                   health.checks.memory === 'healthy';
+                   health.checks.memory === 'healthy' &&
+                   health.checks.cache_health === 'healthy';
+
+  if (!isHealthy) {
+    health.status = "unhealthy";
+  }
 
   res.status(isHealthy ? 200 : 503).json(health);
+});
+
+// API documentation endpoint
+app.get("/api/docs", (req, res) => {
+  res.json({
+    service: "JuaClima Global Weather API",
+    version: "3.0.0",
+    description: "Global weather and climate data API supporting any location on Earth",
+    base_url: req.protocol + '://' + req.get('host'),
+    endpoints: {
+      weather: {
+        "GET /api/weather/coordinates": {
+          description: "Get current weather for specific coordinates",
+          parameters: {
+            lat: "Latitude (-90 to 90)",
+            lon: "Longitude (-180 to 180)"
+          },
+          example: "/api/weather/coordinates?lat=-1.2921&lon=36.8219"
+        },
+        "GET /api/weather/location": {
+          description: "Get weather by location name",
+          parameters: {
+            q: "Location name (required)",
+            country: "Country code (optional)",
+            state: "State code (optional)"
+          },
+          example: "/api/weather/location?q=Nairobi&country=KE"
+        },
+        "GET /api/weather/forecast": {
+          description: "Get weather forecast for coordinates",
+          parameters: {
+            lat: "Latitude (-90 to 90)",
+            lon: "Longitude (-180 to 180)",
+            days: "Number of days (1-5, default: 5)"
+          },
+          example: "/api/weather/forecast?lat=-1.2921&lon=36.8219&days=3"
+        },
+        "POST /api/weather/batch": {
+          description: "Get weather for multiple locations (max 20)",
+          body: {
+            coordinates: [
+              { lat: -1.2921, lon: 36.8219, name: "Nairobi" }
+            ]
+          }
+        }
+      },
+      climate: {
+        "GET /api/climate/coordinates": {
+          description: "Get historical climate data from NASA POWER",
+          parameters: {
+            lat: "Latitude (-90 to 90)",
+            lon: "Longitude (-180 to 180)",
+            days: "Number of days (7-365, default: 30)"
+          },
+          example: "/api/climate/coordinates?lat=-1.2921&lon=36.8219&days=90"
+        }
+      },
+      search: {
+        "GET /api/locations/search": {
+          description: "Search for locations by name",
+          parameters: {
+            q: "Search query (required)",
+            limit: "Max results (1-10, default: 5)"
+          },
+          example: "/api/locations/search?q=paris&limit=3"
+        },
+        "GET /api/datasets/area": {
+          description: "Get datasets for an area around coordinates",
+          parameters: {
+            lat: "Center latitude",
+            lon: "Center longitude", 
+            radius: "Search radius in km (1-500, default: 50)",
+            include: "Data types: weather,climate,forecast (default: weather,climate)"
+          },
+          example: "/api/datasets/area?lat=0&lon=0&radius=100&include=weather,climate"
+        }
+      },
+      system: {
+        "GET /api/health": "Health check and system status",
+        "GET /api/stats": "Server statistics and metrics",
+        "GET /api/docs": "This documentation"
+      }
+    },
+    rate_limits: {
+      weather_api: "Shared OpenWeatherMap rate limits apply",
+      nasa_api: "Reasonable use policy",
+      caching: "10 minutes for weather, 24 hours for locations"
+    },
+    data_sources: {
+      current_weather: "OpenWeatherMap API v2.5",
+      forecasts: "OpenWeatherMap API v2.5",
+      climate_data: "NASA POWER API v2.1",
+      geocoding: "OpenWeatherMap Geocoding API"
+    }
+  });
 });
 
 // Error handling middleware
@@ -957,14 +1343,19 @@ app.use((req, res) => {
     success: false,
     message: "Endpoint not found",
     available_endpoints: [
-      "/", 
-      "/api/health", 
-      "/api/datasets", 
-      "/api/datasets/:id", 
-      "/api/weather/location", 
-      "/api/weather/global-cities", 
-      "/api/stats"
+      "GET /", 
+      "GET /api/health", 
+      "GET /api/docs",
+      "GET /api/weather/coordinates", 
+      "GET /api/weather/location",
+      "GET /api/weather/forecast",
+      "POST /api/weather/batch",
+      "GET /api/climate/coordinates",
+      "GET /api/locations/search",
+      "GET /api/datasets/area",
+      "GET /api/stats"
     ],
+    suggestion: "Visit /api/docs for complete API documentation",
     timestamp: new Date().toISOString()
   });
 });
@@ -994,17 +1385,7 @@ process.on('SIGINT', () => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 JuaClima server running on port ${PORT}`);
-  console.log(`📡 Weather API: ${OPENWEATHER_API_KEY ? '✅ Configured' : '❌ Missing API key'}`);
-  console.log(`🗄️  MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '⚠️ Connecting...'}`);
-  console.log(`👥 Socket.IO: ✅ Ready for connections`);
-  console.log('📊 Available endpoints:');
-  console.log('   - GET  /                        - Service info');  
-  console.log('   - GET  /api/health              - Health check');
-  console.log('   - GET  /api/datasets            - All weather/climate data');
-  console.log('   - GET  /api/datasets/:id        - Single dataset');
-  console.log('   - GET  /api/weather/location    - Weather by coordinates');
-  console.log('   - GET  /api/weather/global-cities - Global cities weather');
-  console.log('   - GET  /api/stats               - Server statistics');
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });

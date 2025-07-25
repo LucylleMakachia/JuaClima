@@ -1,5 +1,3 @@
-# routes/raster.py
-
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import FileResponse
 from pathlib import Path

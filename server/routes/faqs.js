@@ -1,92 +1,69 @@
 import express from "express";
 import FAQ from "../models/faq.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import {
+  withAuthMiddleware,
+  requireAdmin,
+} from "../middleware/auth.js";
+import {
+  getFaqs,
+} from "../controllers/faqController.js";
 
 const router = express.Router();
 
-// GET FAQs with optional search & pagination, grouped by category
-router.get("/", async (req, res) => {
+// Apply auth to all
+router.use(withAuthMiddleware);
+
+// 📌 GET all FAQs (Public, paginated via controller)
+router.get("/", getFaqs);
+
+// 📌 GET single FAQ by ID
+router.get("/:id", async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
-    const query = search
-      ? {
-          $or: [
-            { question: { $regex: search, $options: "i" } },
-            { answer: { $regex: search, $options: "i" } },
-            { category: { $regex: search, $options: "i" } },
-          ],
-        }
-      : {};
+    const faq = await FAQ.findById(req.params.id);
+    if (!faq) return res.status(404).json({ message: "FAQ not found" });
+    res.json(faq);
+  } catch (err) {
+    res.status(500).json({ message: "Error retrieving FAQ" });
+  }
+});
 
-    const faqs = await FAQ.find(query)
-      .sort({ category: 1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
-      .lean()
-      .exec();
-
-    const total = await FAQ.countDocuments(query);
-
-    // Group by category
-    const grouped = faqs.reduce((acc, faq) => {
-      acc[faq.category] = acc[faq.category] || [];
-      acc[faq.category].push(faq);
-      return acc;
-    }, {});
-
-    res.json({
-      faqs: grouped,
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      totalPages: Math.ceil(total / limit),
+// 📌 CREATE new FAQ (Admins only)
+router.post("/", requireAdmin, async (req, res) => {
+  try {
+    const { question, answer, category } = req.body;
+    const newFAQ = await FAQ.create({
+      question,
+      answer,
+      category,
+      createdBy: req.user.id,
     });
+    res.status(201).json(newFAQ);
   } catch (err) {
-    console.error("Failed to fetch FAQs:", err);
-    res.status(500).json({ error: "Failed to fetch FAQs" });
+    res.status(400).json({ message: "Failed to create FAQ" });
   }
 });
 
-// POST new FAQ (admin-only)
-router.post("/", requireAuth, requireAdmin, async (req, res) => {
-  const { category, question, answer } = req.body;
+// 📌 UPDATE FAQ (Admins only)
+router.put("/:id", requireAdmin, async (req, res) => {
   try {
-    const newFaq = new FAQ({ category, question, answer });
-    await newFaq.save();
-    res.status(201).json(newFaq);
+    const updated = await FAQ.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    if (!updated) return res.status(404).json({ message: "FAQ not found" });
+    res.json(updated);
   } catch (err) {
-    res.status(400).json({ error: "Failed to add FAQ" });
+    res.status(400).json({ message: "Failed to update FAQ" });
   }
 });
 
-// PUT update FAQ by ID (admin-only)
-router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
-  const { category, question, answer } = req.body;
+// 📌 DELETE FAQ (Admins only)
+router.delete("/:id", requireAdmin, async (req, res) => {
   try {
-    const updatedFaq = await FAQ.findByIdAndUpdate(
-      req.params.id,
-      { category, question, answer },
-      { new: true, runValidators: true }
-    );
-    if (!updatedFaq) {
-      return res.status(404).json({ error: "FAQ not found" });
-    }
-    res.json(updatedFaq);
-  } catch (err) {
-    res.status(400).json({ error: "Failed to update FAQ" });
-  }
-});
-
-// DELETE FAQ by ID (admin-only)
-router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const deletedFaq = await FAQ.findByIdAndDelete(req.params.id);
-    if (!deletedFaq) {
-      return res.status(404).json({ error: "FAQ not found" });
-    }
+    const deleted = await FAQ.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "FAQ not found" });
     res.json({ message: "FAQ deleted" });
   } catch (err) {
-    res.status(500).json({ error: "Failed to delete FAQ" });
+    res.status(400).json({ message: "Failed to delete FAQ" });
   }
 });
 
