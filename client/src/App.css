@@ -19,12 +19,8 @@
 }
 
 @keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -39,4 +35,46 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* ===== Map Search Bar Styles ===== */
+.leaflet-control-geosearch .leaflet-bar-part {
+  background-color: #16a34a !important; /* Tailwind green-600 */
+  color: white !important;
+  border: none !important;
+}
+
+.leaflet-control-geosearch .leaflet-bar-part:hover {
+  background-color: #15803d !important; /* Tailwind green-700 */
+}
+
+.leaflet-control-geosearch input {
+  border-radius: 0.5rem; /* rounded-lg */
+  border: 1px solid #d1d5db; /* gray-300 */
+  padding: 0.5rem 0.75rem; /* px-3 py-2 */
+  width: 220px;
+}
+
+/* ===== Marker Popup Styles ===== */
+.leaflet-popup-content-wrapper {
+  border-radius: 0.5rem; /* rounded-lg */
+  border: 2px solid #16a34a; /* green-600 border */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.leaflet-popup-content h3 {
+  color: #16a34a; /* green-600 for title */
+  font-weight: bold;
+  margin-bottom: 0.5em;
+}
+
+.leaflet-popup-content p {
+  color: #065f46; /* darker green-800 for text */
+  font-size: 0.875rem;
+  margin: 0.2em 0;
+}
+
+/* Optional: Marker icon color change using filter */
+.leaflet-marker-icon {
+  filter: hue-rotate(100deg) saturate(150%) brightness(1.2);
 }

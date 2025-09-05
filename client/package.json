@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.33.0",
+    "@geoapify/leaflet-address-search-plugin": "^1.0.2",
     "@tailwindcss/vite": "^4.1.11",
     "@turf/turf": "^7.2.0",
     "axios": "^1.10.0",
@@ -23,8 +24,10 @@
     "react-dom": "^19.1.0",
     "react-hot-toast": "^2.5.2",
     "react-icons": "^5.5.0",
+    "react-leaf": "^1.0.4",
     "react-leaflet": "^5.0.0",
     "react-leaflet-draw": "^0.20.6",
+    "react-leaflet-search": "^2.0.1",
     "react-router-dom": "^7.6.3",
     "react-slick": "^0.30.3",
     "react-slideshow-image": "^4.3.2",

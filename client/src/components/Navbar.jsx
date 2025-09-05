@@ -7,10 +7,9 @@ import {
   SignedOut,
   UserButton,
 } from "@clerk/clerk-react";
-import { Link, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { toggleDarkMode } from "../utils/theme";
 
-// Named export for ThemeToggle
 export function ThemeToggle() {
   return (
     <button
@@ -54,38 +53,59 @@ function Navbar() {
     }
   }, [darkMode]);
 
+  const toggleMode = () => setDarkMode(!darkMode);
+
   const location = useLocation();
-  const isHome = location.pathname === "/";
+
+  const handleMobileLinkClick = () => setIsOpen(false);
+
+  const navLinks = [
+    { label: "Home", to: "/" },
+    { label: "Community", to: "/community" },
+    { label: "News & Events", to: "/news" },   // <-- linked to NewsEvents page
+    { label: "Datasets", to: "/datasets" },
+    { label: "Contact", to: "/contact" },
+  ];
 
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold text-green-700 dark:text-green-300">
+        <NavLink
+          to="/"
+          className="text-2xl font-bold text-green-700 dark:text-green-300"
+        >
           JuaClima
-        </Link>
+        </NavLink>
 
         {/* Desktop Nav */}
         <ul className="hidden md:flex space-x-6 text-gray-700 dark:text-gray-200 font-medium items-center">
-          {isHome ? (
-            <>
-              {/* Features tab removed */}
-              <li><a href="#overview">Overview</a></li>
-            </>
-          ) : (
-            <>
-              {/* Features tab removed */}
-              <li><Link to="/#overview">Overview</Link></li>
-            </>
-          )}
-          <li><Link to="/community">Community</Link></li>
-          <li><Link to="/faq">FAQ</Link></li>
-          <li><Link to="/contact">Contact</Link></li>
+          {navLinks.map(({ label, to }) => (
+            <li key={to}>
+              <NavLink
+                to={to}
+                className={({ isActive }) =>
+                  `hover:text-green-700 dark:hover:text-green-300 ${
+                    isActive ? "font-semibold underline" : ""
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            </li>
+          ))}
           {isAdmin && (
-            <li><Link to="/admin/faqs" className="font-semibold">Admin FAQ</Link></li>
+            <li>
+              <NavLink
+                to="/admin/faqs"
+                className="font-semibold hover:text-green-700 dark:hover:text-green-300"
+              >
+                Admin FAQ
+              </NavLink>
+            </li>
           )}
           <li>
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={toggleMode}
               className="text-xl hover:text-green-700 dark:hover:text-green-300"
               title="Toggle dark mode"
             >
@@ -109,8 +129,18 @@ function Navbar() {
         {/* Desktop Auth */}
         <div className="hidden md:block">
           <SignedOut>
-            <Link to="/sign-in" className="bg-green-700 text-white px-4 py-2 rounded-lg hover:bg-green-800 transition">Login</Link>
-            <Link to="/sign-up" className="ml-2 text-green-700 dark:text-green-300 font-medium hover:underline">Sign Up</Link>
+            <NavLink
+              to="/sign-in"
+              className="bg-green-700 text-white px-4 py-2 rounded-lg hover:bg-green-800 transition"
+            >
+              Login
+            </NavLink>
+            <NavLink
+              to="/sign-up"
+              className="ml-2 text-green-700 dark:text-green-300 font-medium hover:underline"
+            >
+              Sign Up
+            </NavLink>
           </SignedOut>
         </div>
 
@@ -127,26 +157,27 @@ function Navbar() {
       {/* Mobile Menu */}
       {isOpen && (
         <ul className="md:hidden px-4 pb-4 space-y-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-100 border-t">
-          {isHome ? (
-            <>
-              {/* Features removed */}
-              <li><a href="#overview">Overview</a></li>
-            </>
-          ) : (
-            <>
-              {/* Features removed */}
-              <li><Link to="/#overview">Overview</Link></li>
-            </>
-          )}
-          <li><Link to="/community">Community</Link></li>
-          <li><Link to="/faq">FAQ</Link></li>
-          <li><Link to="/contact">Contact</Link></li>
+          {navLinks.map(({ label, to }) => (
+            <li key={to}>
+              <NavLink to={to} onClick={handleMobileLinkClick} className="block">
+                {label}
+              </NavLink>
+            </li>
+          ))}
           {isAdmin && (
-            <li><Link to="/admin/faqs" className="font-semibold">Admin FAQ</Link></li>
+            <li>
+              <NavLink
+                to="/admin/faqs"
+                className="font-semibold"
+                onClick={handleMobileLinkClick}
+              >
+                Admin FAQ
+              </NavLink>
+            </li>
           )}
           <li>
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={toggleMode}
               className="flex items-center space-x-1 text-green-700 dark:text-green-300"
             >
               {darkMode ? <Sun size={18} /> : <Moon size={18} />}
@@ -155,15 +186,32 @@ function Navbar() {
           </li>
           <SignedOut>
             <li>
-              <Link to="/sign-in" className="block bg-green-700 text-white text-center py-2 rounded-lg">Login</Link>
+              <NavLink
+                to="/sign-in"
+                className="block bg-green-700 text-white text-center py-2 rounded-lg"
+                onClick={handleMobileLinkClick}
+              >
+                Login
+              </NavLink>
             </li>
             <li>
-              <Link to="/sign-up" className="block text-center text-green-700 dark:text-green-300 font-medium hover:underline">Sign Up</Link>
+              <NavLink
+                to="/sign-up"
+                className="block text-center text-green-700 dark:text-green-300 font-medium hover:underline"
+                onClick={handleMobileLinkClick}
+              >
+                Sign Up
+              </NavLink>
             </li>
           </SignedOut>
           <SignedIn>
             <li>
-              <button onClick={() => signOut()} className="bg-green-700 text-white w-full py-2 rounded-lg">Logout</button>
+              <button
+                onClick={() => signOut()}
+                className="bg-green-700 text-white w-full py-2 rounded-lg"
+              >
+                Logout
+              </button>
             </li>
             <li className="flex justify-center">
               <UserButton />

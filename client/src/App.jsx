@@ -1,52 +1,129 @@
-import { Routes, Route } from "react-router-dom";
-import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
-import Home from "./pages/Home";
-import Upload from "./pages/Upload";
-import Datasets from "./pages/Datasets";
-import Chat from "./pages/Chat";
-import Dashboard from "./pages/Dashboard";
-import ProtectedRoute from "./components/ProtectedRoute";
-import AdminFAQManager from "./components/AdminFAQManager";
-import FAQ from "./pages/FAQ";
-import Contact from "./pages/Contact";
-import Settings from "./pages/Settings";
+import React, { useEffect } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
+import {
+  SignIn,
+  SignUp,
+  SignedIn,
+  SignedOut,
+  RedirectToSignIn,
+  useUser,
+  AuthenticateWithRedirectCallback,
+} from "@clerk/clerk-react";
 
-import LandingPage from "./pages/LandingPage";
-import SignInPage from "./pages/SignInPage";
-import SignUpPage from "./pages/SignUpPage";
-import UserProfilePage from "./pages/UserProfilePage";
+// Pages
+import Home from "./pages/Home";
+import DashboardBasic from "./pages/DashboardBasic";
+import DashboardPremium from "./pages/DashboardPremium";
+import DashboardGuest from "./pages/DashboardGuest";
+import Chat from "./pages/Chat";
+import NewsEvents from "./pages/NewsEvents";
+import FAQ from "./pages/FAQ";
+import Datasets from "./pages/Datasets";
+import Contact from "./pages/Contact";
+import NotFound from "./pages/NotFound";
+import Profile from "./pages/profile";
+import Organization from "./pages/Organization";
+import AdminPanel from "./pages/AdminPanel";
+
+function PostSignInRedirect() {
+  const { user } = useUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      const pkg = user.publicMetadata?.package?.toLowerCase() || "guest";
+
+      switch (pkg) {
+        case "premium":
+          navigate("/dashboard/premium");
+          break;
+        case "basic":
+          navigate("/dashboard/basic");
+          break;
+        default:
+          navigate("/dashboard/guest");
+      }
+    }
+  }, [user, navigate]);
+
+  return <div>Redirecting...</div>;
+}
 
 export default function App() {
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 text-black dark:text-white min-h-screen">
-      <Routes>
-        {/* Landing and auth routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/sign-in" element={<SignInPage />} />
-        <Route path="/sign-up" element={<SignUpPage />} />
-        <Route path="/profile" element={<UserProfilePage />} />
-        <Route path="/settings" element={<Settings />} />
+    <Routes>
+      {/* Public routes */}
+      <Route path="/" element={<Home />} />
+      <Route path="/news-events" element={<NewsEvents />} />
+      <Route path="/faq" element={<FAQ />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/community" element={<Chat />} /> {/* Public chat/community */}
 
-        {/* Main app routes */}
-        <Route path="/home" element={<Home />} />
-        <Route path="/upload" element={<Upload />} />
-        <Route path="/datasets" element={<Datasets />} />
-        <Route path="/community" element={<Chat />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/faq" element={<FAQ />} />
-        <Route path="/contact" element={<Contact />} />
+      {/* Profile & org routes */}
+      <Route path="/profile/:username" element={<Profile />} />
+      <Route path="/organization/:orgId" element={<Organization />} />
 
-        {/* Protected admin FAQ manager route */}
-        <Route
-          path="/admin/faqs"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <AdminFAQManager />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </div>
+      {/* Admin panel */}
+      <Route path="/admin" element={
+        <SignedIn>
+          <AdminPanel />
+        </SignedIn>
+      } />
+
+      {/* Auth routes */}
+      <Route path="/sign-in/*" element={<SignIn routing="path" path="/sign-in" />} />
+      <Route path="/sign-up/*" element={<SignUp routing="path" path="/sign-up" />} />
+      <Route path="/sign-in/sso-callback" element={<AuthenticateWithRedirectCallback />} />
+      <Route path="/post-sign-in" element={<PostSignInRedirect />} />
+
+      {/* Protected dashboard routes by package */}
+      <Route
+        path="/dashboard/basic"
+        element={
+          <SignedIn>
+            <DashboardBasic />
+          </SignedIn>
+        }
+      />
+      <Route
+        path="/dashboard/premium"
+        element={
+          <SignedIn>
+            <DashboardPremium />
+          </SignedIn>
+        }
+      />
+      <Route
+        path="/dashboard/guest"
+        element={
+          <SignedIn>
+            <DashboardGuest />
+          </SignedIn>
+        }
+      />
+
+      {/* Protected datasets route */}
+      <Route
+        path="/datasets"
+        element={
+          <SignedIn>
+            <Datasets />
+          </SignedIn>
+        }
+      />
+
+      {/* Redirect signed-out users for other protected paths */}
+      <Route
+        path="/protected/*"
+        element={
+          <SignedOut>
+            <RedirectToSignIn />
+          </SignedOut>
+        }
+      />
+
+      {/* 404 fallback */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }

@@ -48,15 +48,16 @@ function HeroSection() {
 
       {/* Hero content */}
       <div className="relative z-20 flex flex-col items-center justify-center h-full text-center px-6">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          Empowering Kenya’s Climate Response
+        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
+          Empowering Climate Response
         </h1>
-        <p className="text-lg md:text-xl mb-6 max-w-3xl">
+        <p className="text-base md:text-lg lg:text-xl mb-6 max-w-3xl">
           JuaClima helps local communities, researchers, and decision-makers monitor climate risks, share insights, and respond effectively.
         </p>
         <a
           href="#overview"
-          className="inline-block bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-green-700 transition"
+          className="inline-block bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-green-700 transition transform hover:scale-105"
+          style={{ color: "white" }}
         >
           Explore Dashboard
         </a>

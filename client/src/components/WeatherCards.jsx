@@ -22,10 +22,9 @@ export default function WeatherCards({ coords }) {
     fetchWeather(coords.lat, coords.lng);
   }, [coords]);
 
-  if (error) return <div className="p-4 text-red-500">{error}</div>;
-  if (!weather) return <div className="p-4">Loading weather...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
+  if (!weather) return <div>Loading weather...</div>;
 
-  // Allow zero for rainfall, treat zero as valid value
   const safeValue = (val, unit = "", allowZero = false) =>
     val === undefined || val === null || (val === 0 && !allowZero)
       ? "N/A"
@@ -39,7 +38,7 @@ export default function WeatherCards({ coords }) {
     },
     {
       label: "☔ Rainfall",
-      value: safeValue(weather.precipitation, " mm", true), // allow zero here
+      value: safeValue(weather.precipitation, " mm", true),
       bg: "bg-green-600",
     },
     {
@@ -65,9 +64,9 @@ export default function WeatherCards({ coords }) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 p-4 text-white w-full lg:w-[320px]">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 text-white w-full lg:w-[260px]">
       {cards.map((card, index) => (
-        <div key={index} className={`${card.bg} rounded-lg p-4 shadow-md`}>
+        <div key={index} className={`${card.bg} rounded-lg p-3 shadow-md`}>
           <h3 className="text-sm font-semibold">{card.label}</h3>
           <p className="text-xl">{card.value}</p>
         </div>

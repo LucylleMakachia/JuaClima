@@ -1,27 +1,57 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import HeroSection from "../components/HeroSection";
 import WeatherCards from "../components/WeatherCards";
 import MapView from "../components/MapView";
-import NewsSidebar from "../components/NewsSidebar";
+import Footer from "../components/Footer";
 
 export default function Home() {
-  return (
-    <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen">
-      <Navbar />
-      <main className="max-w-7xl mx-auto px-4 py-10 flex flex-col lg:flex-row gap-8">
-        {/* Main content (75–85%) */}
-        <div className="flex-grow max-w-full lg:max-w-[85%]">
-          <HeroSection />
-          <WeatherCards />
-          <MapView />
-        </div>
+  const [selectedCoords, setSelectedCoords] = useState(null);
 
-        {/* Sidebar on right */}
-        <div className="hidden lg:block w-[15%]">
-          <NewsSidebar />
+  // Load saved coords from localStorage on mount
+  useEffect(() => {
+    const savedCoords = localStorage.getItem("selectedCoords");
+    if (savedCoords) {
+      setSelectedCoords(JSON.parse(savedCoords));
+    }
+  }, []);
+
+  // Save coords to localStorage whenever it changes
+  useEffect(() => {
+    if (selectedCoords) {
+      localStorage.setItem("selectedCoords", JSON.stringify(selectedCoords));
+    }
+  }, [selectedCoords]);
+
+  return (
+    <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen flex flex-col">
+      <Navbar />
+
+      {/* Main content wrapper */}
+      <div className="flex flex-col items-center py-16 mt-16 mb-32">
+        <div className="flex flex-col w-full lg:w-4/5 gap-12">
+          {/* Hero Section */}
+          <HeroSection />
+
+          {/* WeatherCards + MapView */}
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 w-full">
+            {/* WeatherCards container */}
+            <div className="w-full lg:w-1/4 px-6 py-10 min-h-[560px] rounded-lg shadow-lg">
+              <WeatherCards coords={selectedCoords} />
+            </div>
+
+            {/* Map container */}
+            <div className="w-full lg:w-3/4 rounded-lg shadow-lg min-h-[650px]">
+              <MapView
+                selectedCoords={selectedCoords}
+                onMapClick={setSelectedCoords}
+              />
+            </div>
+          </div>
         </div>
-      </main>
+      </div>
+
+      <Footer />
     </div>
   );
 }

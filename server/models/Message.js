@@ -28,7 +28,9 @@ const MessageSchema = new mongoose.Schema(
     // Reference to parent message if this is a reply
     parentId: { type: mongoose.Schema.Types.ObjectId, ref: "Message", default: null },
   },
-  { timestamps: true }
+  { timestamps: true,
+    strictPopulate: false 
+   }
 );
 
 export default mongoose.model("Message", MessageSchema);

@@ -5,7 +5,9 @@ import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
+import validator from "validator";
 import Message from "./models/message.js";
+import newsRouter from "./routes/news.js";
 import faqRoutes from "./routes/faqs.js";
 import leoProfanity from "leo-profanity";
 
@@ -15,10 +17,16 @@ const app = express();
 const server = http.createServer(app);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Routes
 app.use("/api/faqs", faqRoutes);
+app.use("/api/news", newsRouter);
 
 // Socket.IO configuration
 const io = new Server(server, {
@@ -31,33 +39,285 @@ const io = new Server(server, {
   pingInterval: 25000
 });
 
-// MongoDB connection with better error handling
+// MongoDB connection - modernized without deprecated options
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("✅ MongoDB connected successfully");
+    // Set strictPopulate globally to fix populate errors
+    mongoose.set('strictPopulate', false);
   })
-  .then(() => console.log("✅ MongoDB connected successfully"))
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
     process.exit(1);
   });
 
-// Handle MongoDB connection events
+// MongoDB connection events
 mongoose.connection.on('error', (err) => {
   console.error('❌ MongoDB error:', err);
 });
-
 mongoose.connection.on('disconnected', () => {
   console.log('⚠️ MongoDB disconnected');
 });
-
 mongoose.connection.on('reconnected', () => {
   console.log('✅ MongoDB reconnected');
 });
 
-// Track connected users with more details
+// Track connected users
 const onlineUsers = new Map();
+
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`);
+  onlineUsers.set(socket.id, { socketId: socket.id, connectedAt: new Date() });
+
+  io.emit("online_users", Array.from(onlineUsers.keys()));
+
+  // Updated initial messages with proper field mapping for your schema
+  Message.find()
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .then((msgs) => {
+      const frontendMessages = msgs.map(msg => ({
+        _id: msg._id,
+        name: msg.username,
+        text: msg.content,
+        avatarUrl: "",
+        imageUrl: msg.imageUrl,
+        time: msg.createdAt,
+        parentId: msg.parentId,
+        replies: [],
+        reactions: {
+          like: { count: 0, users: [] },
+          love: { count: 0, users: [] },
+          laugh: { count: 0, users: [] },
+          angry: { count: 0, users: [] }
+        },
+        isPrivate: false,
+        reviewed: false,
+        org: null,
+        role: null,
+        socketId: socket.id
+      }));
+      socket.emit("initial_messages", frontendMessages);
+    })
+    .catch((err) => {
+      console.error("Error fetching messages:", err);
+      socket.emit("initial_messages", []);
+    });
+
+  // send_message handler
+  socket.on("send_message", async (message, callback) => {
+    console.log("📨 Received message from client:", JSON.stringify(message, null, 2));
+    
+    try {
+      const messageText = message.text || message.content;
+      const senderName = message.name || message.username;
+      
+      if (
+        !messageText || typeof messageText !== "string" ||
+        !senderName || typeof senderName !== "string" ||
+        validator.isEmpty(messageText.trim()) ||
+        !validator.isLength(messageText.trim(), { min: 1, max: 1000 })
+      ) {
+        throw new Error("Invalid message text or sender name");
+      }
+
+      let cleanText = validator.escape(messageText.trim());
+      cleanText = leoProfanity.clean(cleanText);
+
+      if (message.parentId) {
+        const parentMessage = await Message.findById(message.parentId);
+        if (!parentMessage) {
+          throw new Error("Parent message not found");
+        }
+      }
+
+      const msgRecord = new Message({
+        content: cleanText,
+        username: senderName,
+        emoji: message.emoji || "",
+        tag: message.tag || "",
+        lat: message.lat || null,
+        lng: message.lng || null,
+        imageUrl: message.imageUrl || "",
+        parentId: message.parentId || null,
+        avatarUrl: message.avatarUrl || "",
+        senderId: message.senderId || socket.id,
+      });
+
+      const saved = await msgRecord.save();
+
+      const responseMessage = {
+        _id: saved._id,
+        name: saved.username,
+        text: saved.content,
+        avatarUrl: message.avatarUrl || "",
+        imageUrl: saved.imageUrl,
+        time: saved.createdAt,
+        parentId: saved.parentId,
+        replies: [],
+        reactions: message.reactions || {
+          like: { count: 0, users: [] },
+          love: { count: 0, users: [] },
+          laugh: { count: 0, users: [] },
+          angry: { count: 0, users: [] }
+        },
+        isPrivate: message.isPrivate || false,
+        reviewed: message.reviewed || false,
+        org: message.org || null,
+        role: message.role || null,
+        socketId: socket.id
+      };
+
+      io.emit("receive_message", responseMessage);
+      callback && callback({ status: "ok", id: saved._id });
+    } catch (err) {
+      console.error("❌ Failed to save message:", err);
+      callback && callback({ status: "error", error: err.message });
+    }
+  });
+
+  socket.on("typing", (username) => {
+    socket.broadcast.emit("user_typing", username);
+  });
+
+  socket.on("edit_message", async (editedMessage, callback) => {
+    try {
+      const messageText = editedMessage.text || editedMessage.content;
+      
+      if (
+        !messageText || typeof messageText !== "string" ||
+        validator.isEmpty(messageText.trim()) ||
+        !validator.isLength(messageText.trim(), { min: 1, max: 1000 })
+      ) {
+        throw new Error("Invalid edited message text");
+      }
+
+      const msg = await Message.findById(editedMessage._id);
+      if (!msg) throw new Error("Message not found");
+
+      let cleanText = validator.escape(messageText.trim());
+      cleanText = leoProfanity.clean(cleanText);
+      msg.content = cleanText;
+
+      await msg.save();
+
+      io.emit("message_edited", {
+        _id: msg._id,
+        name: msg.username,
+        text: msg.content,
+        avatarUrl: "",
+        imageUrl: msg.imageUrl,
+        time: msg.createdAt,
+        parentId: msg.parentId,
+        replies: [],
+        reactions: {
+          like: { count: 0, users: [] },
+          love: { count: 0, users: [] },
+          laugh: { count: 0, users: [] },
+          angry: { count: 0, users: [] }
+        },
+        isPrivate: false,
+        reviewed: false,
+        org: null,
+        role: null
+      });
+      
+      callback && callback({ status: "ok" });
+    } catch (err) {
+      console.error("Error editing message:", err);
+      callback && callback({ status: "error", error: err.message });
+    }
+  });
+
+  socket.on("delete_message", async (msgId, callback) => {
+    try {
+      await Message.findByIdAndDelete(msgId);
+      io.emit("message_deleted", msgId);
+      callback && callback({ status: "ok" });
+    } catch (err) {
+      console.error("Error deleting message:", err);
+      callback && callback({ status: "error", error: err.message });
+    }
+  });
+
+  socket.on("reaction_update", async ({ messageId, type, add, user }) => {
+    try {
+      const msg = await Message.findById(messageId);
+      if (!msg) throw new Error("Message not found");
+
+      if (!msg.reactions) {
+        msg.reactions = {
+          like: { count: 0, users: [] },
+          love: { count: 0, users: [] },
+          laugh: { count: 0, users: [] },
+          angry: { count: 0, users: [] }
+        };
+      }
+
+      if (!msg.reactions[type]) {
+        msg.reactions[type] = { count: 0, users: [] };
+      }
+
+      const usersSet = new Set(msg.reactions[type].users || []);
+      if (add) {
+        usersSet.add(user);
+      } else {
+        usersSet.delete(user);
+      }
+      msg.reactions[type].users = Array.from(usersSet);
+      msg.reactions[type].count = usersSet.size;
+
+      await msg.save();
+      
+      io.emit("message_edited", {
+        _id: msg._id,
+        name: msg.username,
+        text: msg.content,
+        avatarUrl: "",
+        imageUrl: msg.imageUrl,
+        time: msg.createdAt,
+        parentId: msg.parentId,
+        replies: [],
+        reactions: msg.reactions,
+        isPrivate: false,
+        reviewed: false,
+        org: null,
+        role: null
+      });
+    } catch (err) {
+      console.error("Error updating reaction:", err);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`User disconnected: ${socket.id}`);
+    onlineUsers.delete(socket.id);
+    io.emit("online_users", Array.from(onlineUsers.keys()));
+  });
+});
+
+// Centralized error handler
+app.use((err, req, res, next) => {
+  console.error(`❌ Error: ${err.message}`, err.stack || "");
+  const statusCode = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
+  res.status(statusCode).json({
+    success: false,
+    error: {
+      message: err.message || "Internal Server Error",
+      code: statusCode,
+    },
+  });
+});
+
+// Global error event listeners
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection:", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+});
+
 
 // Weather/Climate Data Configuration
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
@@ -1386,6 +1646,6 @@ process.on('SIGINT', () => {
 // Start server
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
