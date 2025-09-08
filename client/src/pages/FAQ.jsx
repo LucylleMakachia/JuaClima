@@ -9,7 +9,7 @@ export default function FAQ() {
   useEffect(() => {
     const fetchFaqs = async () => {
       try {
-        const res = await axios.get("/api/faqs?page=1&limit=100");
+        const res = await axios.get("http://localhost:5000/api/faqs?page=1&limit=100");
         const grouped = groupAndSort(res.data.data);
         setFaqs(grouped);
       } catch (error) {

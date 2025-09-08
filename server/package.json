@@ -1,8 +1,8 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend server for the JuaClima climate risk platform, handling GIS data, real-time communication, authentication, and data processing.",
+  "main": "server.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -20,6 +20,7 @@
     "@turf/turf": "^7.2.0",
     "axios": "^1.11.0",
     "bad-words": "^4.0.0",
+    "cheerio": "^1.1.2",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",

@@ -21,9 +21,11 @@ import FAQ from "./pages/FAQ";
 import Datasets from "./pages/Datasets";
 import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
-import Profile from "./pages/profile";
+import NotAuthorized from "./pages/NotAuthorized";
+import Profile from "./pages/Profile";
 import Organization from "./pages/Organization";
 import AdminPanel from "./pages/AdminPanel";
+import About from "./pages/About";   // ✅ Added
 
 function PostSignInRedirect() {
   const { user } = useUser();
@@ -49,26 +51,69 @@ function PostSignInRedirect() {
   return <div>Redirecting...</div>;
 }
 
+// Automatic redirect for /community
+function CommunityRedirect() {
+  const { isSignedIn, user } = useUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isSignedIn) {
+      const pkg = user?.publicMetadata?.package?.toLowerCase();
+      if (pkg === "basic" || pkg === "premium") {
+        navigate("/community/private");
+      } else {
+        navigate("/community/guest");
+      }
+    } else {
+      navigate("/community/guest");
+    }
+  }, [isSignedIn, user, navigate]);
+
+  return <div>Redirecting to Community...</div>;
+}
+
 export default function App() {
   return (
     <Routes>
       {/* Public routes */}
       <Route path="/" element={<Home />} />
-      <Route path="/news-events" element={<NewsEvents />} />
+      <Route path="/news" element={<NewsEvents />} />
       <Route path="/faq" element={<FAQ />} />
       <Route path="/contact" element={<Contact />} />
-      <Route path="/community" element={<Chat />} /> {/* Public chat/community */}
+      <Route path="/about" element={<About />} />   {/* ✅ Added route */}
+
+      {/* Community routes */}
+      <Route path="/community" element={<CommunityRedirect />} />
+      <Route path="/community/guest" element={<Chat mode="guest" />} />
+      <Route
+        path="/community/private"
+        element={
+          <SignedIn>
+            {({ user }) => {
+              const pkg = user?.publicMetadata?.package?.toLowerCase() || "guest";
+              return pkg === "basic" || pkg === "premium" ? (
+                <Chat mode="private" />
+              ) : (
+                <NotAuthorized />
+              );
+            }}
+          </SignedIn>
+        }
+      />
 
       {/* Profile & org routes */}
       <Route path="/profile/:username" element={<Profile />} />
       <Route path="/organization/:orgId" element={<Organization />} />
 
       {/* Admin panel */}
-      <Route path="/admin" element={
-        <SignedIn>
-          <AdminPanel />
-        </SignedIn>
-      } />
+      <Route
+        path="/admin"
+        element={
+          <SignedIn>
+            <AdminPanel />
+          </SignedIn>
+        }
+      />
 
       {/* Auth routes */}
       <Route path="/sign-in/*" element={<SignIn routing="path" path="/sign-in" />} />
@@ -76,7 +121,7 @@ export default function App() {
       <Route path="/sign-in/sso-callback" element={<AuthenticateWithRedirectCallback />} />
       <Route path="/post-sign-in" element={<PostSignInRedirect />} />
 
-      {/* Protected dashboard routes by package */}
+      {/* Protected dashboard routes */}
       <Route
         path="/dashboard/basic"
         element={
@@ -102,7 +147,7 @@ export default function App() {
         }
       />
 
-      {/* Protected datasets route */}
+      {/* Protected datasets */}
       <Route
         path="/datasets"
         element={

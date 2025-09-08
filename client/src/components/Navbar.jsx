@@ -54,18 +54,21 @@ function Navbar() {
   }, [darkMode]);
 
   const toggleMode = () => setDarkMode(!darkMode);
-
-  const location = useLocation();
-
   const handleMobileLinkClick = () => setIsOpen(false);
 
   const navLinks = [
     { label: "Home", to: "/" },
     { label: "Community", to: "/community" },
-    { label: "News & Events", to: "/news" },   // <-- linked to NewsEvents page
+    { label: "News & Events", to: "/news" },
     { label: "Datasets", to: "/datasets" },
     { label: "Contact", to: "/contact" },
   ];
+
+  const userStatus = isSignedIn
+    ? ["basic", "premium"].includes(user?.publicMetadata?.package?.toLowerCase())
+      ? "Member"
+      : "Guest"
+    : "Guest";
 
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-md sticky top-0 z-50">
@@ -114,7 +117,7 @@ function Navbar() {
           </li>
           {isSignedIn && (
             <li className="flex items-center space-x-2">
-              {user.imageUrl && (
+              {user?.imageUrl && (
                 <img
                   src={user.imageUrl}
                   alt="avatar"
@@ -127,7 +130,7 @@ function Navbar() {
         </ul>
 
         {/* Desktop Auth */}
-        <div className="hidden md:block">
+        <div className="hidden md:flex items-center space-x-4">
           <SignedOut>
             <NavLink
               to="/sign-in"
@@ -141,6 +144,7 @@ function Navbar() {
             >
               Sign Up
             </NavLink>
+            <span className="ml-2 italic text-gray-500 dark:text-gray-400">{userStatus}</span>
           </SignedOut>
         </div>
 
@@ -203,6 +207,7 @@ function Navbar() {
                 Sign Up
               </NavLink>
             </li>
+            <li className="italic text-gray-500 dark:text-gray-400 text-center">{userStatus}</li>
           </SignedOut>
           <SignedIn>
             <li>
