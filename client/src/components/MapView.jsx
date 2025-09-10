@@ -1,187 +1,86 @@
 import React, { useEffect, useState, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMapEvents,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import axios from "axios";
 import { OpenStreetMapProvider } from "leaflet-geosearch";
 
-// Online green marker URLs
-const greenIconUrl =
-  "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png";
-const greenIconRetinaUrl =
-  "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png";
-const shadowUrl =
-  "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png";
-
-// Create Leaflet green icon
+// Green marker icon
 const greenIcon = new L.Icon({
-  iconUrl: greenIconUrl,
-  iconRetinaUrl: greenIconRetinaUrl,
-  shadowUrl: shadowUrl,
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
+  iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
+  popupAnchor: [0, -35],
   shadowSize: [41, 41],
 });
 
-// Search control with top center positioning and suggestions
-function SearchControl({ onMapClick, onPlaceNameUpdate, mapRef, markerRef }) {
-  const map = useMap();
-  const [searchText, setSearchText] = useState("");
+// Search bar component
+function SearchBar({ onSelect, mapRef, markerRef }) {
+  const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const provider = useRef(new OpenStreetMapProvider());
-  const containerRef = useRef();
 
-  useEffect(() => {
-    mapRef.current = map;
-  }, [map, mapRef]);
-
-  const handleSearch = async (query) => {
-    if (!query) {
-      setSuggestions([]);
-      return;
-    }
-
+  const handleSearch = async (text) => {
+    if (!text) return setSuggestions([]);
     try {
-      const results = await provider.current.search({ query });
+      const results = await provider.current.search({ query: text });
       setSuggestions(results);
-    } catch (error) {
-      console.error("Search failed:", error);
+    } catch {
       setSuggestions([]);
     }
   };
 
-  const selectSuggestion = (suggestion) => {
-    const { x: lng, y: lat, label, bounds } = suggestion;
-
-    onMapClick({ lat, lng });
-    onPlaceNameUpdate(label);
-    setSearchText(label);
+  const selectSuggestion = (s) => {
+    const { x: lng, y: lat, label, bounds } = s;
+    onSelect({ lat, lng }, label);
+    setQuery(label);
     setSuggestions([]);
 
-    if (bounds && bounds[0] && bounds[1]) {
+    if (bounds?.[0] && bounds?.[1]) {
       const leafletBounds = L.latLngBounds(
         L.latLng(bounds[0].y, bounds[0].x),
         L.latLng(bounds[1].y, bounds[1].x)
       );
-      map.flyToBounds(leafletBounds, { padding: [50, 50], maxZoom: 16 });
+      mapRef.current.flyToBounds(leafletBounds, { padding: [50, 50], maxZoom: 16 });
     } else {
-      map.setView([lat, lng], 16);
+      mapRef.current.setView([lat, lng], 16);
     }
 
-    setTimeout(() => {
-      if (markerRef.current) {
-        markerRef.current.openPopup();
-      }
-    }, 500);
+    setTimeout(() => markerRef.current?.openPopup(), 300);
   };
 
-  // Close suggestions dropdown if clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setSuggestions([]);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   return (
-    <div
-      ref={containerRef}
-      onClick={(e) => e.stopPropagation()} // Prevent map click when clicking on search bar
-      style={{
-        position: "absolute",
-        top: 10,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 1000,
-        width: "320px",
-        background: "white",
-        borderRadius: "4px",
-        boxShadow: "0 1px 6px rgba(0,0,0,0.3)",
-        padding: "4px",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center" }}>
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-80 bg-white rounded-md shadow-md p-1">
+      <div className="flex">
         <button
-          onClick={() => handleSearch(searchText)}
-          style={{
-            border: "none",
-            backgroundColor: "#4CAF50",
-            color: "white",
-            padding: "8px 12px",
-            borderTopLeftRadius: "4px",
-            borderBottomLeftRadius: "4px",
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-          aria-label="Search"
-          title="Search"
+          onClick={() => handleSearch(query)}
+          className="bg-green-500 text-white px-3 py-1 rounded-l-md hover:bg-green-600"
         >
           🔍
         </button>
         <input
           type="text"
-          placeholder="Search for a location"
-          value={searchText}
-          onChange={(e) => {
-            setSearchText(e.target.value);
-            handleSearch(e.target.value);
-          }}
+          placeholder="Search location"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); handleSearch(e.target.value); }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && searchText.trim()) {
-              e.preventDefault();
-              handleSearch(searchText);
-              if (suggestions.length === 1) {
-                selectSuggestion(suggestions[0]);
-              }
-            }
+            if (e.key === "Enter" && suggestions[0]) selectSuggestion(suggestions[0]);
           }}
-          style={{
-            border: "none",
-            padding: "8px 12px",
-            outline: "none",
-            width: "100%",
-            borderTopRightRadius: "4px",
-            borderBottomRightRadius: "4px",
-          }}
+          className="flex-1 px-2 py-1 rounded-r-md border-none outline-none"
         />
       </div>
       {suggestions.length > 0 && (
-        <ul
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: "4px 0",
-            maxHeight: "200px",
-            overflowY: "auto",
-            borderTop: "1px solid #ddd",
-            cursor: "pointer",
-          }}
-        >
-          {suggestions.map((suggestion, idx) => (
+        <ul className="max-h-52 overflow-y-auto border-t border-gray-200">
+          {suggestions.map((s, idx) => (
             <li
               key={idx}
-              onClick={() => selectSuggestion(suggestion)}
-              style={{
-                padding: "6px 10px",
-                borderBottom: "1px solid #eee",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              title={suggestion.label}
+              onClick={() => selectSuggestion(s)}
+              className="px-2 py-1 hover:bg-gray-100 truncate cursor-pointer"
+              title={s.label}
             >
-              {suggestion.label}
+              {s.label}
             </li>
           ))}
         </ul>
@@ -191,125 +90,55 @@ function SearchControl({ onMapClick, onPlaceNameUpdate, mapRef, markerRef }) {
 }
 
 // Map click handler
-function LocationPicker({ onMapClick, mapRef, markerRef }) {
+function LocationPicker({ onClick }) {
   useMapEvents({
-    click: async (e) => {
-      const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
-      onMapClick(coords);
-
-      if (!mapRef.current) return;
-
-      try {
-        const res = await axios.get(
-          "https://nominatim.openstreetmap.org/reverse",
-          {
-            params: {
-              lat: coords.lat,
-              lon: coords.lng,
-              format: "json",
-              zoom: 10,
-              addressdetails: 1,
-            },
-          }
-        );
-
-        const flyToLocation = () => {
-          setTimeout(() => {
-            if (markerRef.current) {
-              markerRef.current.openPopup();
-            }
-          }, 500);
-        };
-
-        if (res.data && res.data.boundingbox) {
-          const [south, north, west, east] = res.data.boundingbox.map(Number);
-          const bounds = L.latLngBounds(
-            L.latLng(south, west),
-            L.latLng(north, east)
-          );
-          mapRef.current.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-          flyToLocation();
-        } else {
-          mapRef.current.flyTo([coords.lat, coords.lng], 13);
-          flyToLocation();
-        }
-      } catch (err) {
-        console.warn("Reverse geocode failed:", err);
-        mapRef.current.flyTo([coords.lat, coords.lng], 13);
-        setTimeout(() => {
-          if (markerRef.current) {
-            markerRef.current.openPopup();
-          }
-        }, 500);
-      }
-    },
+    click: (e) => onClick({ lat: e.latlng.lat, lng: e.latlng.lng }),
   });
   return null;
 }
 
-// Main Map component
+// Main map component
 export default function MapView({ selectedCoords, onMapClick }) {
   const [placeName, setPlaceName] = useState("Nairobi");
   const mapRef = useRef();
   const markerRef = useRef();
 
-  // Reverse geocode selectedCoords for popup name
+  const handleSelect = (coords, label) => {
+    onMapClick(coords);
+    setPlaceName(label);
+  };
+
   useEffect(() => {
     if (!selectedCoords) return;
 
     const fetchPlaceName = async () => {
       try {
-        const res = await axios.get(
-          "https://nominatim.openstreetmap.org/reverse",
-          {
-            params: {
-              lat: selectedCoords.lat,
-              lon: selectedCoords.lng,
-              format: "json",
-            },
-          }
-        );
+        const res = await axios.get("https://nominatim.openstreetmap.org/reverse", {
+          params: { lat: selectedCoords.lat, lon: selectedCoords.lng, format: "json" },
+        });
         setPlaceName(res.data.display_name || "Selected Location");
-      } catch (err) {
-        console.warn("Reverse geocode failed:", err);
+      } catch {
         setPlaceName("Selected Location");
       }
     };
-
     fetchPlaceName();
+
+    if (mapRef.current) {
+      mapRef.current.flyTo([selectedCoords.lat, selectedCoords.lng], 16);
+      setTimeout(() => markerRef.current?.openPopup(), 300);
+    }
   }, [selectedCoords]);
 
-  // Keep popup in view if map moves or zooms
-  useEffect(() => {
-    if (!mapRef.current || !markerRef.current) return;
-
-    const handleMove = () => {
-      if (markerRef.current && markerRef.current.getPopup()) {
-        markerRef.current.getPopup().update();
-      }
-    };
-
-    mapRef.current.on("move", handleMove);
-    mapRef.current.on("zoom", handleMove);
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.off("move", handleMove);
-        mapRef.current.off("zoom", handleMove);
-      }
-    };
-  }, [mapRef, markerRef]);
-
   return (
-    <div>
+    <div className="relative w-full h-[650px]">
+      {/* Search bar visible on top of map */}
+      <SearchBar onSelect={handleSelect} mapRef={mapRef} markerRef={markerRef} />
+
       <MapContainer
-        center={
-          selectedCoords ? [selectedCoords.lat, selectedCoords.lng] : [-1.2921, 36.8219]
-        } // Nairobi city center
+        center={selectedCoords ? [selectedCoords.lat, selectedCoords.lng] : [-1.2921, 36.8219]}
         zoom={10}
-        scrollWheelZoom={true}
-        className="w-full rounded-xl z-0"
-        style={{ height: "650px", maxWidth: "100%" }}
+        scrollWheelZoom
+        className="w-full h-full rounded-xl z-0"
         whenCreated={(map) => (mapRef.current = map)}
       >
         <TileLayer
@@ -317,34 +146,16 @@ export default function MapView({ selectedCoords, onMapClick }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <SearchControl
-          onMapClick={onMapClick}
-          onPlaceNameUpdate={setPlaceName}
-          mapRef={mapRef}
-          markerRef={markerRef}
-        />
-
-        <LocationPicker
-          onMapClick={onMapClick}
-          mapRef={mapRef}
-          markerRef={markerRef}
-        />
+        <LocationPicker onClick={onMapClick} />
 
         {selectedCoords && (
-          <Marker
-            position={[selectedCoords.lat, selectedCoords.lng]}
-            icon={greenIcon}
-            ref={markerRef}
-          >
-            <Popup autoPan autoPanPadding={[50, 50]} keepInView>
-              <div className="min-w-[180px]">
-                <h3 className="font-bold mb-2">{placeName}</h3>
-                <p className="text-sm text-gray-600">
-                  Lat: {selectedCoords.lat.toFixed(4)}
-                </p>
-                <p className="text-sm text-gray-600">
-                  Lng: {selectedCoords.lng.toFixed(4)}
-                </p>
+          <Marker position={[selectedCoords.lat, selectedCoords.lng]} icon={greenIcon} ref={markerRef}>
+            <Popup autoPan={false} closeButton>
+              <div className="text-sm min-w-[200px]">
+                <h3 className="font-bold text-green-700 mb-1">{placeName}</h3>
+                <p>Latitude: <span className="font-medium">{selectedCoords.lat.toFixed(4)}</span></p>
+                <p>Longitude: <span className="font-medium">{selectedCoords.lng.toFixed(4)}</span></p>
+                <p className="mt-1 text-gray-500 text-xs">Click elsewhere to select another location</p>
               </div>
             </Popup>
           </Marker>

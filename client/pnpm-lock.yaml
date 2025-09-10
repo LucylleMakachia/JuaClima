@@ -11,9 +11,15 @@ importers:
       '@clerk/clerk-react':
         specifier: ^5.33.0
         version: 5.33.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@geoapify/geocoder-autocomplete':
+        specifier: ^2.2.1
+        version: 2.2.1
       '@geoapify/leaflet-address-search-plugin':
         specifier: ^1.0.2
         version: 1.0.2(leaflet@1.9.4)
+      '@geoapify/react-geocoder-autocomplete':
+        specifier: ^2.2.1
+        version: 2.2.1(@geoapify/geocoder-autocomplete@2.2.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tailwindcss/vite':
         specifier: ^4.1.11
         version: 4.1.11(vite@7.0.4(jiti@2.4.2)(lightningcss@1.30.1))
@@ -83,6 +89,9 @@ importers:
       react-toastify:
         specifier: ^11.0.5
         version: 11.0.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react-tooltip:
+        specifier: ^5.29.1
+        version: 5.29.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       recharts:
         specifier: ^3.1.0
         version: 3.1.0(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react-is@19.1.0)(react@19.1.0)(redux@5.0.1)
@@ -449,10 +458,30 @@ packages:
     resolution: {integrity: sha512-1+WqvgNMhmlAambTvT3KPtCl/Ibr68VldY2XY40SL1CE0ZXiakFR/cbTspaF5HsnpDMvcYYoJHfl4980NBjGag==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@floating-ui/core@1.7.3':
+    resolution: {integrity: sha512-sGnvb5dmrJaKEZ+LDIpguvdX3bDlEllmv4/ClQ9awcmCZrlx5jQyyMWFM5kBI+EyNOCDDiKk8il0zeuX3Zlg/w==}
+
+  '@floating-ui/dom@1.7.4':
+    resolution: {integrity: sha512-OOchDgh4F2CchOX94cRVqhvy7b3AFb+/rQXyswmzmGakRfkMgoWVjfnLWkRirfLEfuD4ysVW16eXzwt3jHIzKA==}
+
+  '@floating-ui/utils@0.2.10':
+    resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+
+  '@geoapify/geocoder-autocomplete@2.2.1':
+    resolution: {integrity: sha512-bK1vWeDpsrNn8j6sj9BFBEPLgENZ8yXkIQTntXGWzbZoNViYj77vI0LiaxMQvaCBgEiRH7BxRouaJlsWt67CPg==}
+
   '@geoapify/leaflet-address-search-plugin@1.0.2':
     resolution: {integrity: sha512-V8k/uZmeBJ8a+UKRRWbbVI9eeSDymzjpD6/IN6FNNFh6mGJgDiVvG8tEF+b215njgpXl7BRxkUId2A1LPXR+Wg==}
     peerDependencies:
       leaflet: '*'
+
+  '@geoapify/react-geocoder-autocomplete@2.2.1':
+    resolution: {integrity: sha512-T7x1kAFlGMnGUAKiwhqGR31TTMzQ/iQGrLR5jxSFkivQrrRL7BrXzVOgPsLwuGz0aSJHHldHUv3sRW9Yej965Q==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@geoapify/geocoder-autocomplete': ^2.2.0
+      react: ^19.1.1
+      react-dom: ^19.1.1
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -2271,6 +2300,12 @@ packages:
       react: ^18 || ^19
       react-dom: ^18 || ^19
 
+  react-tooltip@5.29.1:
+    resolution: {integrity: sha512-rmJmEb/p99xWhwmVT7F7riLG08wwKykjHiMGbDPloNJk3tdI73oHsVOwzZ4SRjqMdd5/xwb/4nmz0RcoMfY7Bw==}
+    peerDependencies:
+      react: '>=16.14.0'
+      react-dom: '>=16.14.0'
+
   react@19.1.0:
     resolution: {integrity: sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==}
     engines: {node: '>=0.10.0'}
@@ -2793,9 +2828,28 @@ snapshots:
       '@eslint/core': 0.15.1
       levn: 0.4.1
 
+  '@floating-ui/core@1.7.3':
+    dependencies:
+      '@floating-ui/utils': 0.2.10
+
+  '@floating-ui/dom@1.7.4':
+    dependencies:
+      '@floating-ui/core': 1.7.3
+      '@floating-ui/utils': 0.2.10
+
+  '@floating-ui/utils@0.2.10': {}
+
+  '@geoapify/geocoder-autocomplete@2.2.1': {}
+
   '@geoapify/leaflet-address-search-plugin@1.0.2(leaflet@1.9.4)':
     dependencies:
       leaflet: 1.9.4
+
+  '@geoapify/react-geocoder-autocomplete@2.2.1(@geoapify/geocoder-autocomplete@2.2.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@geoapify/geocoder-autocomplete': 2.2.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
 
   '@humanfs/core@0.19.1': {}
 
@@ -5320,6 +5374,13 @@ snapshots:
   react-toastify@11.0.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       clsx: 2.1.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  react-tooltip@5.29.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+    dependencies:
+      '@floating-ui/dom': 1.7.4
+      classnames: 2.5.1
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 

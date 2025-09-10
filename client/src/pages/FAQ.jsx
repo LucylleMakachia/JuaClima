@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
 
 export default function FAQ() {
   const [faqs, setFaqs] = useState([]);
@@ -37,35 +35,31 @@ export default function FAQ() {
   };
 
   return (
-    <>
-      <Navbar />
-      <div className="min-h-screen bg-gray-50 text-gray-800 px-4 py-10">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8 text-center md:text-left">
-            Frequently Asked Questions
-          </h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 px-4 py-10">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8 text-center md:text-left">
+          Frequently Asked Questions
+        </h1>
 
-          {Object.entries(faqs).map(([category, questions]) => (
-            <div key={category} className="mb-10">
-              <h2 className="text-2xl font-semibold text-blue-700 mb-4">{category}</h2>
-              <div className="space-y-6">
-                {questions.map((faq) => (
-                  <div
-                    key={faq._id}
-                    className="bg-white shadow rounded-xl p-5 border border-gray-200"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {faq.question}
-                    </h3>
-                    <p className="text-gray-700">{faq.answer}</p>
-                  </div>
-                ))}
-              </div>
+        {Object.entries(faqs).map(([category, questions]) => (
+          <div key={category} className="mb-10">
+            <h2 className="text-2xl font-semibold text-blue-700 mb-4">{category}</h2>
+            <div className="space-y-6">
+              {questions.map((faq) => (
+                <div
+                  key={faq._id}
+                  className="bg-white dark:bg-gray-800 shadow rounded-xl p-5 border border-gray-200 dark:border-gray-700"
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    {faq.question}
+                  </h3>
+                  <p className="text-gray-700 dark:text-gray-300">{faq.answer}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-      <Footer />
-    </>
+    </div>
   );
 }

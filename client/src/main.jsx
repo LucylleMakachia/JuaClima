@@ -12,6 +12,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
+initDarkMode();
+
 const ClerkLoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-100">
     <div className="text-center">
@@ -21,39 +23,39 @@ const ClerkLoadingFallback = () => (
   </div>
 );
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-initDarkMode();
+const Root = () => (
+  <BrowserRouter>
+    {PUBLISHABLE_KEY ? (
+      <ClerkProvider
+        publishableKey={PUBLISHABLE_KEY}
+        appearance={{
+          variables: {
+            colorPrimary: '#16a34a',
+            colorText: '#171717',
+          },
+        }}
+        signInUrl="/sign-in"
+        signUpUrl="/sign-up"
+        signInFallbackRedirectUrl="/datasets"
+        signUpFallbackRedirectUrl="/datasets"
+        signInForceRedirectUrl="/datasets"
+        signUpForceRedirectUrl="/datasets"
+        afterSignOutUrl="/"
+      >
+        <App />
+      </ClerkProvider>
+    ) : (
+      <App />
+    )}
+  </BrowserRouter>
+);
 
+const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <StrictMode>
     <ErrorBoundary>
       <Suspense fallback={<ClerkLoadingFallback />}>
-        {PUBLISHABLE_KEY ? (
-          <ClerkProvider 
-            publishableKey={PUBLISHABLE_KEY}
-            appearance={{
-              variables: {
-                colorPrimary: '#16a34a', // green-600
-                colorText: '#171717',    // neutral-900
-              }
-            }}
-            signInUrl="/sign-in"
-            signUpUrl="/sign-up"
-            signInFallbackRedirectUrl="/datasets"
-            signUpFallbackRedirectUrl="/datasets"
-            signInForceRedirectUrl="/datasets"
-            signUpForceRedirectUrl="/datasets"
-            afterSignOutUrl="/"
-          >
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </ClerkProvider>
-        ) : (
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        )}
+        <Root />
       </Suspense>
     </ErrorBoundary>
   </StrictMode>

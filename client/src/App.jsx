@@ -10,7 +10,8 @@ import {
   AuthenticateWithRedirectCallback,
 } from "@clerk/clerk-react";
 
-// Pages
+import Layout from "./components/Layout";
+
 import Home from "./pages/Home";
 import DashboardBasic from "./pages/DashboardBasic";
 import DashboardPremium from "./pages/DashboardPremium";
@@ -25,33 +26,30 @@ import NotAuthorized from "./pages/NotAuthorized";
 import Profile from "./pages/Profile";
 import Organization from "./pages/Organization";
 import AdminPanel from "./pages/AdminPanel";
-import About from "./pages/About";   // ✅ Added
+import About from "./pages/About";
 
 function PostSignInRedirect() {
   const { user } = useUser();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
-      const pkg = user.publicMetadata?.package?.toLowerCase() || "guest";
-
-      switch (pkg) {
-        case "premium":
-          navigate("/dashboard/premium");
-          break;
-        case "basic":
-          navigate("/dashboard/basic");
-          break;
-        default:
-          navigate("/dashboard/guest");
-      }
+    if (!user) return;
+    const pkg = user.publicMetadata?.package?.toLowerCase() || "guest";
+    switch (pkg) {
+      case "premium":
+        navigate("/dashboard/premium");
+        break;
+      case "basic":
+        navigate("/dashboard/basic");
+        break;
+      default:
+        navigate("/dashboard/guest");
     }
   }, [user, navigate]);
 
   return <div>Redirecting...</div>;
 }
 
-// Automatic redirect for /community
 function CommunityRedirect() {
   const { isSignedIn, user } = useUser();
   const navigate = useNavigate();
@@ -59,11 +57,11 @@ function CommunityRedirect() {
   useEffect(() => {
     if (isSignedIn) {
       const pkg = user?.publicMetadata?.package?.toLowerCase();
-      if (pkg === "basic" || pkg === "premium") {
-        navigate("/community/private");
-      } else {
-        navigate("/community/guest");
-      }
+      navigate(
+        pkg === "basic" || pkg === "premium"
+          ? "/community/private"
+          : "/community/guest"
+      );
     } else {
       navigate("/community/guest");
     }
@@ -75,89 +73,85 @@ function CommunityRedirect() {
 export default function App() {
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/" element={<Home />} />
-      <Route path="/news" element={<NewsEvents />} />
-      <Route path="/faq" element={<FAQ />} />
-      <Route path="/contact" element={<Contact />} />
-      <Route path="/about" element={<About />} />   {/* ✅ Added route */}
+      {/* Layout-wrapped routes */}
+      <Route element={<Layout />}>
+        <Route index element={<Home />} />
+        <Route path="/news" element={<NewsEvents />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/about" element={<About />} />
 
-      {/* Community routes */}
-      <Route path="/community" element={<CommunityRedirect />} />
-      <Route path="/community/guest" element={<Chat mode="guest" />} />
-      <Route
-        path="/community/private"
-        element={
-          <SignedIn>
-            {({ user }) => {
-              const pkg = user?.publicMetadata?.package?.toLowerCase() || "guest";
-              return pkg === "basic" || pkg === "premium" ? (
-                <Chat mode="private" />
-              ) : (
-                <NotAuthorized />
-              );
-            }}
-          </SignedIn>
-        }
-      />
+        {/* Community */}
+        <Route path="/community" element={<CommunityRedirect />} />
+        <Route path="/community/guest" element={<Chat mode="guest" />} />
+        <Route
+          path="/community/private"
+          element={
+            <SignedIn>
+              <Chat mode="private" />
+            </SignedIn>
+          }
+        />
 
-      {/* Profile & org routes */}
-      <Route path="/profile/:username" element={<Profile />} />
-      <Route path="/organization/:orgId" element={<Organization />} />
+        {/* Profiles */}
+        <Route path="/profile/:username" element={<Profile />} />
+        <Route path="/organization/:orgId" element={<Organization />} />
 
-      {/* Admin panel */}
-      <Route
-        path="/admin"
-        element={
-          <SignedIn>
-            <AdminPanel />
-          </SignedIn>
-        }
-      />
+        {/* Dashboards */}
+        <Route
+          path="/dashboard/basic"
+          element={
+            <SignedIn>
+              <DashboardBasic />
+            </SignedIn>
+          }
+        />
+        <Route
+          path="/dashboard/premium"
+          element={
+            <SignedIn>
+              <DashboardPremium />
+            </SignedIn>
+          }
+        />
+        <Route
+          path="/dashboard/guest"
+          element={
+            <SignedIn>
+              <DashboardGuest />
+            </SignedIn>
+          }
+        />
+
+        {/* Datasets – visible to all, download only for signed-in users */}
+        <Route path="/datasets" element={<Datasets />} />
+
+        {/* Admin */}
+        <Route
+          path="/admin"
+          element={
+            <SignedIn>
+              <AdminPanel />
+            </SignedIn>
+          }
+        />
+
+        {/* Post sign-in redirect */}
+        <Route path="/post-sign-in" element={<PostSignInRedirect />} />
+
+        {/* 404 Not Found */}
+        <Route path="*" element={<NotFound />} />
+      </Route>
 
       {/* Auth routes */}
       <Route path="/sign-in/*" element={<SignIn routing="path" path="/sign-in" />} />
       <Route path="/sign-up/*" element={<SignUp routing="path" path="/sign-up" />} />
-      <Route path="/sign-in/sso-callback" element={<AuthenticateWithRedirectCallback />} />
-      <Route path="/post-sign-in" element={<PostSignInRedirect />} />
-
-      {/* Protected dashboard routes */}
       <Route
-        path="/dashboard/basic"
-        element={
-          <SignedIn>
-            <DashboardBasic />
-          </SignedIn>
-        }
-      />
-      <Route
-        path="/dashboard/premium"
-        element={
-          <SignedIn>
-            <DashboardPremium />
-          </SignedIn>
-        }
-      />
-      <Route
-        path="/dashboard/guest"
-        element={
-          <SignedIn>
-            <DashboardGuest />
-          </SignedIn>
-        }
+        path="/sign-in/sso-callback"
+        element={<AuthenticateWithRedirectCallback />}
       />
 
-      {/* Protected datasets */}
-      <Route
-        path="/datasets"
-        element={
-          <SignedIn>
-            <Datasets />
-          </SignedIn>
-        }
-      />
-
-      {/* Redirect signed-out users for other protected paths */}
+      {/* Signed-out fallback for protected routes */}
       <Route
         path="/protected/*"
         element={
@@ -166,9 +160,6 @@ export default function App() {
           </SignedOut>
         }
       />
-
-      {/* 404 fallback */}
-      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

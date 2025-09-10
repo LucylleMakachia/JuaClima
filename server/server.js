@@ -9,12 +9,28 @@ import validator from "validator";
 import Message from "./models/message.js";
 import newsRouter from "./routes/news.js";
 import faqRoutes from "./routes/faqs.js";
+import datasetsRouter from "./routes/datasets.js";
 import leoProfanity from "leo-profanity";
+import winston from "winston";
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Winston logger setup for structured logging
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+    winston.format.colorize(),
+    winston.format.printf(({ timestamp, level, message, ...meta }) => {
+      const metaString = Object.keys(meta).length ? JSON.stringify(meta) : "";
+      return `${timestamp} ${level}: ${message} ${metaString}`;
+    })
+  ),
+  transports: [new winston.transports.Console()],
+});
 
 // Middleware
 app.use(cors({
@@ -27,6 +43,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Routes
 app.use("/api/faqs", faqRoutes);
 app.use("/api/news", newsRouter);
+app.use("/api/datasets", datasetsRouter);
 
 // Socket.IO configuration
 const io = new Server(server, {

@@ -2,11 +2,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
 import {
-  CLIMATE_KEYWORDS, normalizeText,
-  formatDate, getRegion, deduplicateItems, sortByDate
+  CLIMATE_KEYWORDS,
+  normalizeText,
+  formatDate,
+  getRegion,
+  deduplicateItems,
+  sortByDate
 } from "../utils/newsHelpers";
 
 const ALLOWED_REGIONS = [
@@ -25,7 +27,6 @@ export default function NewsEvents() {
   const [itemsToShowEvents, setItemsToShowEvents] = useState({});
   const [lastUpdatedNews, setLastUpdatedNews] = useState(null);
   const [lastUpdatedEvents, setLastUpdatedEvents] = useState(null);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -35,7 +36,7 @@ export default function NewsEvents() {
     return items.filter(item => {
       if (!item.title) return false;
       const text = normalizeText(`${item.title} ${item.description || ""} ${item.content || ""}`);
-      return CLIMATE_KEYWORDS.some(k => new RegExp(`\\b${normalizeText(k)}\\b`, 'i').test(text));
+      return CLIMATE_KEYWORDS.some(k => new RegExp(`\\b${normalizeText(k)}\\b`, "i").test(text));
     });
   }, []);
 
@@ -62,15 +63,9 @@ export default function NewsEvents() {
     setLoading(true);
     setError(null);
     try {
-      // Use full URL to your backend server
-      const res = await fetch(`http://localhost:5000/api/news?type=${type}`, { 
-        credentials: "include" 
-      });
+      const res = await fetch(`http://localhost:5000/api/news?type=${type}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Failed to fetch ${type}: ${res.status} ${res.statusText}`);
-      
       const responseData = await res.json();
-      
-      // Extract items from the response (not data)
       const items = responseData.items || [];
       if (!Array.isArray(items)) throw new Error(`Invalid ${type} response: items is not an array`);
 
@@ -86,7 +81,6 @@ export default function NewsEvents() {
 
       const uniqueItems = deduplicateItems(filteredItems);
       const grouped = groupByRegion(uniqueItems);
-
       const limited = {};
       Object.keys(grouped).forEach(region => {
         if (ALLOWED_REGIONS.includes(region)) {
@@ -132,14 +126,10 @@ export default function NewsEvents() {
 
   const handleLoadMore = (region, type) => {
     const setItemsToShow = type === "news" ? setItemsToShowNews : setItemsToShowEvents;
-    setItemsToShow(prev => ({
-      ...prev,
-      [region]: (prev[region] || INITIAL_VISIBLE) + 5
-    }));
+    setItemsToShow(prev => ({ ...prev, [region]: (prev[region] || INITIAL_VISIBLE) + 5 }));
   };
 
   const handleSearchInput = (e) => setSearchQuery(e.target.value);
-
   const handleSearchClick = () => {
     fetchData("news");
     fetchData("events");
@@ -176,129 +166,122 @@ export default function NewsEvents() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen flex flex-col">
-      <Navbar />
-      <main className="flex flex-col items-center py-16 mt-4 mb-32 w-full lg:w-11/12 mx-auto">
-
-        <div className="flex flex-col w-full max-w-5xl mb-4 relative">
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchInput}
-              onKeyDown={handleKeyDown}
-              placeholder="Search news/events"
-              className="flex-1 p-2 border rounded dark:bg-gray-800 dark:text-white"
-            />
-            <button
-              onClick={handleSearchClick}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded"
-            >
-              Search
-            </button>
-          </div>
-          {suggestions.length > 0 && (
-            <ul className="absolute z-50 bg-white dark:bg-gray-800 border rounded w-full max-w-md mt-1 max-h-60 overflow-auto">
-              {suggestions.map((s, i) => (
-                <li
-                  key={i}
-                  className={`px-2 py-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${i === activeSuggestion ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
-                  onMouseEnter={() => setActiveSuggestion(i)}
-                  onMouseLeave={() => setActiveSuggestion(-1)}
-                  onClick={() => { 
-                    setSearchQuery(s); 
-                    setDebouncedQuery(s); 
-                    setSuggestions([]);
-                    setActiveSuggestion(-1);
-                  }}
-                  ref={el => {
-                    if (i === activeSuggestion && el) {
-                      el.scrollIntoView({ block: 'nearest' });
-                    }
-                  }}
-                >
-                  {highlightMatch(s)}
-                </li>
-              ))}
-            </ul>
-          )}
+    <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen flex flex-col py-16 mb-32 w-full lg:w-11/12 mx-auto">
+      <div className="flex flex-col w-full max-w-5xl mb-4 relative">
+        <div className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={handleSearchInput}
+            onKeyDown={handleKeyDown}
+            placeholder="Search news/events"
+            className="flex-1 p-2 border rounded dark:bg-gray-800 dark:text-white"
+          />
+          <button
+            onClick={handleSearchClick}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded"
+          >
+            Search
+          </button>
         </div>
+        {suggestions.length > 0 && (
+          <ul className="absolute z-50 bg-white dark:bg-gray-800 border rounded w-full max-w-md mt-1 max-h-60 overflow-auto">
+            {suggestions.map((s, i) => (
+              <li
+                key={i}
+                className={`px-2 py-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${i === activeSuggestion ? "bg-gray-200 dark:bg-gray-700" : ""}`}
+                onMouseEnter={() => setActiveSuggestion(i)}
+                onMouseLeave={() => setActiveSuggestion(-1)}
+                onClick={() => {
+                  setSearchQuery(s);
+                  setDebouncedQuery(s);
+                  setSuggestions([]);
+                  setActiveSuggestion(-1);
+                }}
+                ref={el => {
+                  if (i === activeSuggestion && el) el.scrollIntoView({ block: "nearest" });
+                }}
+              >
+                {highlightMatch(s)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-        <section style={{ marginBottom: 32, width: "100%" }}>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">Climate News</h3>
-            <button onClick={() => fetchData("news")} disabled={loadingNews}>
-              <RefreshCw className={`w-4 h-4 ${loadingNews ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-          {lastUpdatedNews && <p className="text-xs text-gray-500 mb-2">Last updated: {lastUpdatedNews.toLocaleTimeString()}</p>}
-          {loadingNews ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={50} />)
-            : errorNews ? <p className="text-red-500">{errorNews}</p>
-            : Object.entries(newsByRegion).length === 0 ? <p className="text-gray-500">No news found</p>
-            : Object.entries(newsByRegion).map(([region, items]) => {
-                const visibleCount = itemsToShowNews[region] || INITIAL_VISIBLE;
-                const visibleItems = items.slice(0, visibleCount);
-                return (
-                  <div key={region} className="mb-4">
-                    <h4 className="font-semibold">{region}</h4>
-                    <div className="flex flex-col gap-2">
-                      {visibleItems.map((item, i) => (
-                        <a key={item.url || i} href={item.url} target="_blank" rel="noopener noreferrer"
-                          className="block p-3 rounded border hover:bg-gray-100 dark:hover:bg-gray-800">
-                          <h5 className="font-medium">{highlightMatch(item.title)}</h5>
-                          <p className="text-xs text-gray-600 dark:text-gray-300">{highlightMatch(item.description?.substring(0, 120) || "")}</p>
-                          <div className="flex justify-between text-xs text-blue-600">
-                            <span>{typeof item.source === "string" ? item.source : item.source?.name || "Unknown"}</span>
-                            <span>{formatDate(item.publishedAt || item.date)}</span>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                    {visibleCount < items.length &&
-                      <button onClick={() => handleLoadMore(region, "news")} className="text-blue-600 text-xs mt-1 underline">Load more...</button>}
+      <section style={{ marginBottom: 32, width: "100%" }}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Climate News</h3>
+          <button onClick={() => fetchData("news")} disabled={loadingNews}>
+            <RefreshCw className={`w-4 h-4 ${loadingNews ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        {lastUpdatedNews && <p className="text-xs text-gray-500 mb-2">Last updated: {lastUpdatedNews.toLocaleTimeString()}</p>}
+        {loadingNews ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={50} />)
+          : errorNews ? <p className="text-red-500">{errorNews}</p>
+          : Object.entries(newsByRegion).length === 0 ? <p className="text-gray-500">No news found</p>
+          : Object.entries(newsByRegion).map(([region, items]) => {
+              const visibleCount = itemsToShowNews[region] || INITIAL_VISIBLE;
+              const visibleItems = items.slice(0, visibleCount);
+              return (
+                <div key={region} className="mb-4">
+                  <h4 className="font-semibold">{region}</h4>
+                  <div className="flex flex-col gap-2">
+                    {visibleItems.map((item, i) => (
+                      <a key={item.url || i} href={item.url} target="_blank" rel="noopener noreferrer"
+                        className="block p-3 rounded border hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <h5 className="font-medium">{highlightMatch(item.title)}</h5>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">{highlightMatch(item.description?.substring(0, 120) || "")}</p>
+                        <div className="flex justify-between text-xs text-blue-600">
+                          <span>{typeof item.source === "string" ? item.source : item.source?.name || "Unknown"}</span>
+                          <span>{formatDate(item.publishedAt || item.date)}</span>
+                        </div>
+                      </a>
+                    ))}
                   </div>
-                );
-              })}
-        </section>
+                  {visibleCount < items.length &&
+                    <button onClick={() => handleLoadMore(region, "news")} className="text-blue-600 text-xs mt-1 underline">Load more...</button>}
+                </div>
+              );
+            })}
+      </section>
 
-        <section style={{ width: "100%" }}>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">Climate Events</h3>
-            <button onClick={() => fetchData("events")} disabled={loadingEvents}>
-              <RefreshCw className={`w-4 h-4 ${loadingEvents ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-          {lastUpdatedEvents && <p className="text-xs text-gray-500 mb-2">Last updated: {lastUpdatedEvents.toLocaleTimeString()}</p>}
-          {loadingEvents ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={50} />)
-            : errorEvents ? <p className="text-red-500">{errorEvents}</p>
-            : Object.entries(eventsByRegion).length === 0 ? <p className="text-gray-500">No events found</p>
-            : Object.entries(eventsByRegion).map(([region, items]) => {
-                const visibleCount = itemsToShowEvents[region] || INITIAL_VISIBLE;
-                const visibleItems = items.slice(0, visibleCount);
-                return (
-                  <div key={region} className="mb-4">
-                    <h4 className="font-semibold">{region}</h4>
-                    <div className="flex flex-col gap-2">
-                      {visibleItems.map((item, i) => (
-                        <a key={item.url || i} href={item.url} target="_blank" rel="noopener noreferrer"
-                          className="block p-3 rounded border hover:bg-gray-100 dark:hover:bg-gray-800">
-                          <h5 className="font-medium">{highlightMatch(item.title)}</h5>
-                          <p className="text-xs text-gray-600 dark:text-gray-300">{highlightMatch(item.description?.substring(0, 120) || "")}</p>
-                          <div className="flex justify-between text-xs text-blue-600">
-                            <span>{item.organizer || typeof item.source === "string" ? item.source : item.source?.name || "Unknown"}</span>
-                            <span>{formatDate(item.date)}</span>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                    {visibleCount < items.length &&
-                      <button onClick={() => handleLoadMore(region, "events")} className="text-blue-600 text-xs mt-1 underline">Load more...</button>}
+      <section style={{ width: "100%" }}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Climate Events</h3>
+          <button onClick={() => fetchData("events")} disabled={loadingEvents}>
+            <RefreshCw className={`w-4 h-4 ${loadingEvents ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        {lastUpdatedEvents && <p className="text-xs text-gray-500 mb-2">Last updated: {lastUpdatedEvents.toLocaleTimeString()}</p>}
+        {loadingEvents ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={50} />)
+          : errorEvents ? <p className="text-red-500">{errorEvents}</p>
+          : Object.entries(eventsByRegion).length === 0 ? <p className="text-gray-500">No events found</p>
+          : Object.entries(eventsByRegion).map(([region, items]) => {
+              const visibleCount = itemsToShowEvents[region] || INITIAL_VISIBLE;
+              const visibleItems = items.slice(0, visibleCount);
+              return (
+                <div key={region} className="mb-4">
+                  <h4 className="font-semibold">{region}</h4>
+                  <div className="flex flex-col gap-2">
+                    {visibleItems.map((item, i) => (
+                      <a key={item.url || i} href={item.url} target="_blank" rel="noopener noreferrer"
+                        className="block p-3 rounded border hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <h5 className="font-medium">{highlightMatch(item.title)}</h5>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">{highlightMatch(item.description?.substring(0, 120) || "")}</p>
+                        <div className="flex justify-between text-xs text-blue-600">
+                          <span>{item.organizer || typeof item.source === "string" ? item.source : item.source?.name || "Unknown"}</span>
+                          <span>{formatDate(item.date)}</span>
+                        </div>
+                      </a>
+                    ))}
                   </div>
-                );
-              })}
-        </section>
-      </main>
-      <Footer />
+                  {visibleCount < items.length &&
+                    <button onClick={() => handleLoadMore(region, "events")} className="text-blue-600 text-xs mt-1 underline">Load more...</button>}
+                </div>
+              );
+            })}
+      </section>
     </div>
   );
 }

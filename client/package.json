@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.33.0",
+    "@geoapify/geocoder-autocomplete": "^2.2.1",
     "@geoapify/leaflet-address-search-plugin": "^1.0.2",
+    "@geoapify/react-geocoder-autocomplete": "^2.2.1",
     "@tailwindcss/vite": "^4.1.11",
     "@tsparticles/react": "^3.0.0",
     "@turf/turf": "^7.2.0",
@@ -35,6 +37,7 @@
     "react-slick": "^0.30.3",
     "react-slideshow-image": "^4.3.2",
     "react-toastify": "^11.0.5",
+    "react-tooltip": "^5.29.1",
     "recharts": "^3.1.0",
     "slick-carousel": "^1.8.1",
     "socket.io-client": "^4.8.1",

@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import Slider from "react-slick";
 import { useLocation } from "react-router-dom";
 import "slick-carousel/slick/slick.css";
@@ -23,6 +24,20 @@ function HeroSection() {
   const location = useLocation();
   const showSlideshow = location.pathname === "/";
 
+  // Stars state
+  const [stars, setStars] = useState([]);
+
+  useEffect(() => {
+    const generatedStars = Array.from({ length: 25 }).map(() => ({
+      top: Math.random() * 80 + 10 + "%",
+      left: Math.random() * 90 + 5 + "%",
+      size: Math.random() * 3 + 2,
+      delay: Math.random() * 3,
+      opacity: Math.random() * 0.5 + 0.5,
+    }));
+    setStars(generatedStars);
+  }, []);
+
   if (!showSlideshow) return null;
 
   return (
@@ -34,9 +49,7 @@ function HeroSection() {
             <div key={i}>
               <div
                 className="h-[90vh] w-full bg-cover bg-center"
-                style={{
-                  backgroundImage: `url(${src})`,
-                }}
+                style={{ backgroundImage: `url(${src})` }}
               />
             </div>
           ))}
@@ -45,6 +58,24 @@ function HeroSection() {
 
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/60 z-10" />
+
+      {/* Twinkling stars */}
+      <div className="absolute inset-0 z-15 pointer-events-none">
+        {stars.map((star, i) => (
+          <div
+            key={i}
+            className="absolute bg-white rounded-full animate-twinkle"
+            style={{
+              top: star.top,
+              left: star.left,
+              width: `${star.size}px`,
+              height: `${star.size}px`,
+              animationDelay: `${star.delay}s`,
+              opacity: star.opacity,
+            }}
+          />
+        ))}
+      </div>
 
       {/* Hero content */}
       <div className="relative z-20 flex flex-col items-center justify-center h-full text-center px-6">

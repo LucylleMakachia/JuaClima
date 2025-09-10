@@ -4,7 +4,6 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App.jsx";
 import "./index.css";
 
-// Clerk Frontend API key from your .env file
 const clerkFrontendApi = process.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 if (!clerkFrontendApi) {
@@ -15,8 +14,14 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={clerkFrontendApi}>
-      <App />
-    </ClerkProvider>
+    {clerkFrontendApi ? (
+      <ClerkProvider publishableKey={clerkFrontendApi}>
+        <App />
+      </ClerkProvider>
+    ) : (
+      <div className="text-red-600 text-center mt-20">
+        Error: Clerk publishable key missing.
+      </div>
+    )}
   </React.StrictMode>
 );
