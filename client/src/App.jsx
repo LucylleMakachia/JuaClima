@@ -13,20 +13,24 @@ import {
 import Layout from "./components/Layout";
 
 import Home from "./pages/Home";
+import Team from "./pages/Team"; // <-- Import Team page
 import DashboardBasic from "./pages/DashboardBasic";
 import DashboardPremium from "./pages/DashboardPremium";
 import DashboardGuest from "./pages/DashboardGuest";
 import Chat from "./pages/Chat";
 import NewsEvents from "./pages/NewsEvents";
-import FAQ from "./pages/FAQ";
 import Datasets from "./pages/Datasets";
-import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
-import NotAuthorized from "./pages/NotAuthorized";
 import Profile from "./pages/Profile";
 import Organization from "./pages/Organization";
 import AdminPanel from "./pages/AdminPanel";
 import About from "./pages/About";
+import Help from "./pages/Help";
+import Tutorials from "./pages/Tutorials";
+import Policies from "./pages/Policies";
+import Visualizations from "./pages/Visualizations";
+import Testimonials from "./pages/Testimonials";
+import Blog from "./pages/Blog";
 
 function PostSignInRedirect() {
   const { user } = useUser();
@@ -77,9 +81,20 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="/news" element={<NewsEvents />} />
-        <Route path="/faq" element={<FAQ />} />
-        <Route path="/contact" element={<Contact />} />
         <Route path="/about" element={<About />} />
+        <Route path="/team" element={<Team />} /> {/* <-- Added Team route */}
+
+        {/* Support / Tutorials / Policies */}
+        <Route path="/help" element={<Help />} />
+        <Route path="/tutorials" element={<Tutorials />} />
+        <Route path="/policies" element={<Policies />} />
+
+        {/* Visualizations */}
+        <Route path="/visualizations" element={<Visualizations />} />
+
+        {/* Testimonials / Blog */}
+        <Route path="/testimonials" element={<Testimonials />} />
+        <Route path="/blog/:id" element={<Blog />} />
 
         {/* Community */}
         <Route path="/community" element={<CommunityRedirect />} />
@@ -123,7 +138,7 @@ export default function App() {
           }
         />
 
-        {/* Datasets – visible to all, download only for signed-in users */}
+        {/* Datasets */}
         <Route path="/datasets" element={<Datasets />} />
 
         {/* Admin */}
@@ -139,7 +154,7 @@ export default function App() {
         {/* Post sign-in redirect */}
         <Route path="/post-sign-in" element={<PostSignInRedirect />} />
 
-        {/* 404 Not Found */}
+        {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Route>
 

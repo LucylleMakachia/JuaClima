@@ -1,45 +1,21 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Menu, X, Sun, Moon } from "lucide-react";
-import {
-  useUser,
-  useClerk,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from "@clerk/clerk-react";
-import { NavLink, useLocation } from "react-router-dom";
-import { toggleDarkMode } from "../utils/theme";
-
-export function ThemeToggle() {
-  return (
-    <button
-      onClick={toggleDarkMode}
-      className="text-sm p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-    >
-      Toggle Theme
-    </button>
-  );
-}
+import { NavLink } from "react-router-dom";
+import { useUser, useClerk, UserButton, SignedOut, SignedIn } from "@clerk/clerk-react";
+import { navLinks } from "../config/navLinks";
+import MobileDropdown from "./MobileDropdown";
+import DesktopDropdown from "./DesktopDropdown";
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { isSignedIn, user } = useUser();
   const { signOut } = useClerk();
-  const userRoles = user?.publicMetadata?.roles || [];
-  const isAdmin = isSignedIn && userRoles.includes("admin");
-
-  const [darkMode, setDarkMode] = useState(
-    () => localStorage.getItem("theme") === "dark"
-  );
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
 
   useEffect(() => {
     const userTheme = localStorage.getItem("theme");
     const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    if (userTheme === "dark" || (!userTheme && systemPrefersDark)) {
-      setDarkMode(true);
-    } else {
-      setDarkMode(false);
-    }
+    setDarkMode(userTheme === "dark" || (!userTheme && systemPrefersDark));
   }, []);
 
   useEffect(() => {
@@ -56,16 +32,9 @@ function Navbar() {
   const toggleMode = () => setDarkMode(!darkMode);
   const handleMobileLinkClick = () => setIsOpen(false);
 
-  const navLinks = [
-    { label: "Home", to: "/" },
-    { label: "Community", to: "/community" },
-    { label: "News & Events", to: "/news" },
-    { label: "Datasets", to: "/datasets" },
-    { label: "Contact", to: "/contact" },
-  ];
-
+  const userPackage = user?.publicMetadata?.package?.toLowerCase() || "";
   const userStatus = isSignedIn
-    ? ["basic", "premium"].includes(user?.publicMetadata?.package?.toLowerCase())
+    ? ["basic", "premium"].includes(userPackage)
       ? "Member"
       : "Guest"
     : "Guest";
@@ -73,79 +42,69 @@ function Navbar() {
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-        <NavLink
-          to="/"
-          className="text-2xl font-bold text-green-700 dark:text-green-300"
-        >
+
+        {/* Logo */}
+        <NavLink to="/" className="text-2xl font-bold text-green-700 dark:text-green-300">
           JuaClima
         </NavLink>
 
         {/* Desktop Nav */}
-        <ul className="hidden md:flex space-x-6 text-gray-700 dark:text-gray-200 font-medium items-center">
-          {navLinks.map(({ label, to }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                className={({ isActive }) =>
-                  `hover:text-green-700 dark:hover:text-green-300 ${
-                    isActive ? "font-semibold underline" : ""
-                  }`
-                }
-              >
-                {label}
-              </NavLink>
-            </li>
-          ))}
-          {isAdmin && (
-            <li>
-              <NavLink
-                to="/admin/faqs"
-                className="font-semibold hover:text-green-700 dark:hover:text-green-300"
-              >
-                Admin FAQ
-              </NavLink>
-            </li>
-          )}
-          <li>
-            <button
-              onClick={toggleMode}
-              className="text-xl hover:text-green-700 dark:hover:text-green-300"
-              title="Toggle dark mode"
-            >
-              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-          </li>
-          {isSignedIn && (
-            <li className="flex items-center space-x-2">
-              {user?.imageUrl && (
-                <img
-                  src={user.imageUrl}
-                  alt="avatar"
-                  className="w-8 h-8 rounded-full border"
-                />
-              )}
-              <UserButton afterSignOutUrl="/" />
-            </li>
-          )}
+        <ul className="hidden md:flex space-x-6 text-gray-700 dark:text-gray-200 font-medium items-center justify-center flex-1">
+          {navLinks
+            .filter(section => section.label !== "Admin")
+            .map((section) =>
+              section.children ? (
+                <DesktopDropdown key={section.label} section={section} />
+              ) : (
+                <li key={section.to}>
+                  <NavLink
+                    to={section.to}
+                    className={({ isActive }) =>
+                      `hover:text-green-700 dark:hover:text-green-300 ${isActive ? "font-semibold underline" : ""}`
+                    }
+                  >
+                    {section.label}
+                  </NavLink>
+                </li>
+              )
+            )}
         </ul>
 
-        {/* Desktop Auth */}
-        <div className="hidden md:flex items-center space-x-4">
+        {/* Auth Buttons */}
+        <div className="flex items-center space-x-4">
           <SignedOut>
             <NavLink
               to="/sign-in"
-              className="bg-green-700 text-white px-4 py-2 rounded-lg hover:bg-green-800 transition"
+              className="bg-green-700 text-white px-3 py-1 rounded-lg hover:bg-green-600 font-medium"
             >
               Login
             </NavLink>
             <NavLink
               to="/sign-up"
-              className="ml-2 text-green-700 dark:text-green-300 font-medium hover:underline"
+              className="text-green-700 dark:text-green-300 px-3 py-1 font-medium hover:underline"
             >
               Sign Up
             </NavLink>
-            <span className="ml-2 italic text-gray-500 dark:text-gray-400">{userStatus}</span>
           </SignedOut>
+          <SignedIn>
+            <UserButton />
+            <span className="text-gray-700 dark:text-gray-200 font-medium">{userStatus}</span>
+            <button
+              onClick={() => signOut()}
+              className="bg-green-700 text-white px-3 py-1 rounded-lg hover:bg-green-600"
+            >
+              Logout
+            </button>
+          </SignedIn>
+
+          {/* Dark Mode */}
+          <button
+            onClick={toggleMode}
+            className="text-xl hover:text-green-700 dark:hover:text-green-300"
+            title="Toggle dark mode"
+          >
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
         </div>
 
         {/* Mobile Menu Button */}
@@ -161,24 +120,29 @@ function Navbar() {
       {/* Mobile Menu */}
       {isOpen && (
         <ul className="md:hidden px-4 pb-4 space-y-2 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-100 border-t">
-          {navLinks.map(({ label, to }) => (
-            <li key={to}>
-              <NavLink to={to} onClick={handleMobileLinkClick} className="block">
-                {label}
-              </NavLink>
-            </li>
-          ))}
-          {isAdmin && (
-            <li>
-              <NavLink
-                to="/admin/faqs"
-                className="font-semibold"
-                onClick={handleMobileLinkClick}
-              >
-                Admin FAQ
-              </NavLink>
-            </li>
-          )}
+          {navLinks
+            .filter(section => section.label !== "Admin")
+            .map((section) =>
+              section.children ? (
+                <MobileDropdown
+                  key={section.label}
+                  section={section}
+                  handleMobileLinkClick={handleMobileLinkClick}
+                />
+              ) : (
+                <li key={section.to}>
+                  <NavLink
+                    to={section.to}
+                    onClick={handleMobileLinkClick}
+                    className="block px-4 py-2 rounded-lg hover:bg-green-100 dark:hover:bg-gray-700 transition"
+                  >
+                    {section.label}
+                  </NavLink>
+                </li>
+              )
+            )}
+
+          {/* Dark Mode */}
           <li>
             <button
               onClick={toggleMode}
@@ -188,40 +152,6 @@ function Navbar() {
               <span>{darkMode ? "Light" : "Dark"} Mode</span>
             </button>
           </li>
-          <SignedOut>
-            <li>
-              <NavLink
-                to="/sign-in"
-                className="block bg-green-700 text-white text-center py-2 rounded-lg"
-                onClick={handleMobileLinkClick}
-              >
-                Login
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/sign-up"
-                className="block text-center text-green-700 dark:text-green-300 font-medium hover:underline"
-                onClick={handleMobileLinkClick}
-              >
-                Sign Up
-              </NavLink>
-            </li>
-            <li className="italic text-gray-500 dark:text-gray-400 text-center">{userStatus}</li>
-          </SignedOut>
-          <SignedIn>
-            <li>
-              <button
-                onClick={() => signOut()}
-                className="bg-green-700 text-white w-full py-2 rounded-lg"
-              >
-                Logout
-              </button>
-            </li>
-            <li className="flex justify-center">
-              <UserButton />
-            </li>
-          </SignedIn>
         </ul>
       )}
     </nav>

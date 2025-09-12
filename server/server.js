@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import axios from "axios";
 import validator from "validator";
 import Message from "./models/message.js";
+import BlogPost from "./models/BlogPost.js";
 import newsRouter from "./routes/news.js";
 import faqRoutes from "./routes/faqs.js";
 import datasetsRouter from "./routes/datasets.js";
@@ -1603,6 +1604,116 @@ app.get("/api/docs", (req, res) => {
     }
   });
 });
+
+// GET all posts (summaries for Testimonials)
+app.get("/api/blog", async (req, res) => {
+  try {
+    const posts = await BlogPost.find().sort({ date: -1 });
+    const summary = posts.map((p) => ({
+      id: p._id,
+      title: p.title,
+      excerpt: p.excerpt,
+      media: p.media,
+      type: p.type,
+      author: p.author,
+      location: p.location,
+      date: p.date.toDateString(),
+      likes: p.likes,
+    }));
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch posts" });
+  }
+});
+
+// GET single post by ID (full content)
+app.get("/api/blog/:id", async (req, res) => {
+  try {
+    const post = await BlogPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json({
+      id: post._id,
+      title: post.title,
+      excerpt: post.excerpt,
+      content: post.content,
+      media: post.media,
+      type: post.type,
+      author: post.author,
+      location: post.location,
+      date: post.date.toDateString(),
+      likes: post.likes,
+      comments: post.comments,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch post" });
+  }
+});
+
+// POST comment
+app.post("/api/blog/:id/comments", async (req, res) => {
+  try {
+    const { text, user } = req.body;
+    const post = await BlogPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    const comment = { user: user || "Anonymous", text };
+    post.comments.push(comment);
+    await post.save();
+
+    res.status(201).json(comment);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to add comment" });
+  }
+});
+
+// POST like
+app.post("/api/blog/:id/like", async (req, res) => {
+  try {
+    const post = await BlogPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    post.likes += 1;
+    await post.save();
+
+    res.json({ likes: post.likes });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to like post" });
+  }
+});
+
+// Create new post
+app.post("/api/blog", async (req, res) => {
+  try {
+    const post = new BlogPost(req.body);
+    await post.save();
+    res.status(201).json(post);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create post" });
+  }
+});
+
+// Update existing post
+app.put("/api/blog/:id", async (req, res) => {
+  try {
+    const post = await BlogPost.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update post" });
+  }
+});
+
+// Delete post
+app.delete("/api/blog/:id", async (req, res) => {
+  try {
+    const post = await BlogPost.findByIdAndDelete(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json({ message: "Post deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete post" });
+  }
+});
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
